@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Follower {
+  id                              String   @id @db.Uuid
+  followerId                      String   @db.Uuid
+  followingId                     String   @db.Uuid
+  createdAt                       DateTime @default(now()) @db.Timestamptz(6)
+  User_Follower_followerIdToUser  User     @relation("Follower_followerIdToUser", fields: [followerId], references: [id], onDelete: Cascade)
+  User_Follower_followingIdToUser User     @relation("Follower_followingIdToUser", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+model OtpVerification {
+  id        String   @id @db.Uuid
+  email     String
+  otp       String
+  attempts  Int      @default(0)
+  expiresAt DateTime @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([email])
+  @@index([email, otp])
+}
+
+model PasswordReset {
+  id        String   @id @db.Uuid
+  userId    String   @db.Uuid
+  token     String
+  expiresAt DateTime @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model PendingUser {
+  id        String   @id @db.Uuid
+  email     String   @unique
+  username  String   @unique
+  password  String
+  firstName String?
+  lastName  String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  expiresAt DateTime @default(dbgenerated("(now() + '1 day'::interval)")) @db.Timestamptz(6)
+}
+
+model User {
+  id                                  String          @id @db.Uuid
+  email                               String          @unique
+  username                            String          @unique
+  password                            String?
+  firstName                           String?
+  lastName                            String?
+  avatar                              String?
+  provider                            String?
+  providerId                          String?
+  isActive                            Boolean         @default(true)
+  isEmailVerified                     Boolean         @default(false)
+  lastLogin                           DateTime
+  createdAt                           DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt                           DateTime        @db.Timestamptz(6)
+  Follower_Follower_followerIdToUser  Follower[]      @relation("Follower_followerIdToUser")
+  Follower_Follower_followingIdToUser Follower[]      @relation("Follower_followingIdToUser")
+  PasswordReset                       PasswordReset[]
+
+  @@index([email])
+}
+
+enum task_frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+  ONE_TIME
+  CUSTOM
+}
