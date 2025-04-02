@@ -5,15 +5,16 @@ import { ContentsController } from './contents.controller';
 import { ContentsRepository } from './contents.repository';
 import { Content, ContentSchema } from './contents.schema';
 import { ReviewsModule } from '../reviews/reviews.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Content.name, schema: ContentSchema }]),
     ReviewsModule, // ✅ ici
+    AuthModule, // Pour OptionalJwtAuthGuard
   ],
   controllers: [ContentsController],
   providers: [ContentsService, ContentsRepository],
   exports: [ContentsService, ContentsRepository],
 })
 export class ContentsModule {}
-

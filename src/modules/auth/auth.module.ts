@@ -12,6 +12,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
 import { APP_GUARD } from '@nestjs/core';
 
 @Module({
@@ -20,9 +21,9 @@ import { APP_GUARD } from '@nestjs/core';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('jwt.secret'),
+        secret: configService.get<string>('JWT_ACCESS_SECRET'),
         signOptions: {
-          expiresIn: configService.get<string>('jwt.expiresIn'),
+          expiresIn: configService.get<string>('JWT_ACCESS_EXPIRES_IN', '15m'),
         },
       }),
       inject: [ConfigService],
@@ -39,11 +40,17 @@ import { APP_GUARD } from '@nestjs/core';
     JwtStrategy,
     GoogleStrategy,
     JwtAuthGuard,
+    OptionalJwtAuthGuard,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
   ],
-  exports: [AuthService, TokenService, JwtAuthGuard],
+  exports: [
+    TokenService,
+    JwtAuthGuard,
+    OptionalJwtAuthGuard,
+    JwtStrategy,  // Export JwtStrategy pour qu'il soit disponible dans les autres modules
+  ],
 })
 export class AuthModule {}

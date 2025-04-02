@@ -20,8 +20,8 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/user.decorator';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 
 @ApiTags('Contents')
 @Controller('contents')
@@ -59,10 +59,11 @@ export class ContentsController {
     return this.contentsService.getContentById(id);
   }
 
-  @Public()
+  @UseGuards(OptionalJwtAuthGuard) // Déplacé avant @Public pour s'assurer qu'il est appliqué en premier
+  @Public() 
   @Get(':id/reviews')
   @ApiOperation({
-    summary: 'Obtenir stats, review utilisateur et reviews avec commentaires pour un contenu',
+    summary: 'Obtenir review utilisateur et reviews avec commentaires pour un contenu',
   })
   @ApiParam({ name: 'id', type: 'string' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -81,22 +82,22 @@ export class ContentsController {
     @Query('sort') sort: 'date_desc' | 'date_asc' | 'rating_desc' | 'rating_asc' = 'date_desc',
     @CurrentUser('sub') userId?: string,
   ) {
-    const [stats, userReview, reviews] = await Promise.all([
-      this.contentsService.getContentStats(contentId),
-      userId ? this.reviewsService.getUserReviewForContent(contentId, userId) : null,
-      this.reviewsService.getPaginatedCommentReviewsWithUser(
-        contentId,
-        page,
-        limit,
-        sort,
-        userId,
-      ),
-    ]);
+    return this.reviewsService.getPaginatedCommentReviewsWithUser(
+      contentId,
+      page,
+      limit,
+      sort,
+      userId,
+    );
+  }
 
-    return {
-      stats,
-      userReview,
-      reviews,
-    };
+  @Public()
+  @Get('stats/:id')
+  @ApiOperation({ summary: 'Obtenir les statistiques d’un contenu' })
+  @ApiParam({ name: 'id', type: 'string' })
+  @ApiResponse({ status: 200, description: 'Statistiques du contenu.' })
+  @ApiResponse({ status: 404, description: 'Contenu non trouvé.' })
+  async getContentStats(@Param('id') id: string) {
+    return this.contentsService.getContentStats(id);
   }
 }

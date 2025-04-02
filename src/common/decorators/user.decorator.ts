@@ -5,12 +5,16 @@ export const CurrentUser = createParamDecorator(
     const request = ctx.switchToHttp().getRequest();
     const user = request.user;
 
-    // ✅ Si on demande un champ précis, on le retourne
+    console.log('[DEBUG] CurrentUser decorator - data:', data);
+    console.log('[DEBUG] CurrentUser decorator - user:', user);
+
+    // Si on demande un champ précis, on le retourne
     if (data) {
+      console.log('[DEBUG] CurrentUser decorator - returning:', user?.[data]);
       return user?.[data];
     }
 
-    // ✅ Sinon, retourne tout l'objet
+    // Sinon, retourne tout l'objet
     return user;
   },
 );

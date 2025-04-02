@@ -6,8 +6,8 @@ export class Review extends Document {
   @Prop({ required: true })
   userId: string;
 
-  @Prop({ required: true, type: Types.ObjectId })
-  contentId: Types.ObjectId;
+  @Prop({ required: true })
+contentId: string;
 
   @Prop({ required: true, min: 0.5, max: 5 })
   rating: number;
@@ -20,7 +20,23 @@ export class Review extends Document {
 
   @Prop({ default: 0 })
   commentsCount: number;
+
+  // ✅ Déclaration explicite des timestamps
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export const ReviewSchema = SchemaFactory.createForClass(Review);
+
+// ✅ Index pour empêcher les doublons userId + contentId
 ReviewSchema.index({ userId: 1, contentId: 1 }, { unique: true });
+
+// ✅ Index pour la pagination et le tri des reviews par contenu
+ReviewSchema.index({ contentId: 1, updatedAt: -1 });
+ReviewSchema.index({ contentId: 1, rating: -1 });
+
+// ✅ Index pour le comptage des reviews par contenu
+ReviewSchema.index({ contentId: 1 });
+
+// ✅ Index pour la recherche de review par userId (pour userReview)
+ReviewSchema.index({ userId: 1 });
