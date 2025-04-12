@@ -25,6 +25,7 @@ async function bootstrap() {
     .addTag('auth', 'Authentication endpoints')
     .addTag('users', 'User management endpoints')
     .addTag('profile', 'Profile management endpoints')
+    .addTag('search', 'Recherche de contenus')
     .addBearerAuth(
       {
         type: 'http',

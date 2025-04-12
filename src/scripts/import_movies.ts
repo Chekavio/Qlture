@@ -1,144 +1,157 @@
 import axios from 'axios';
 import mongoose from 'mongoose';
-import { Content, ContentSchema } from '../modules/contents/contents.schema';
+import { ContentSchema } from '../modules/contents/contents.schema';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-// ✅ Charger les variables d'environnement
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+const envPath = path.join(__dirname, '../../.env');
+dotenv.config({ path: envPath });
 
-// ✅ Vérification des variables d'environnement
-console.log("🔹 MONGO_URI détecté :", process.env.MONGO_URI || "❌ NON TROUVÉ !");
-console.log("🔹 TMDB_API_KEY détecté :", process.env.TMDB_API_KEY ? "✅ OK" : "❌ NON TROUVÉ !");
-
-const MONGO_URI = process.env.MONGO_URI!;
+const MONGO_URI = process.env.MONGODB_URI!;
 const TMDB_API_KEY = process.env.TMDB_API_KEY!;
 const TMDB_URL = "https://api.themoviedb.org/3";
-const MAX_PAGES = 500; // Nombre de pages max
-const MAX_TOTAL_MOVIES = 500_000; // Limite max de films à importer
 
-// ✅ Connexion à MongoDB
-mongoose.connect(MONGO_URI)
-  .then(() => console.log("✅ Connecté à MongoDB"))
-  .catch(err => {
-    console.error("❌ Erreur de connexion MongoDB :", err);
-    process.exit(1);
-  });
+const START_YEAR = 2022; // reprendre à 2017
+const END_YEAR = 1950;
+const MAX_PAGES_PER_YEAR = 500;
+const CONCURRENCY = 2;
+const THROTTLE_MS = 1200;
+
+mongoose.connect(MONGO_URI, {
+  bufferCommands: false,
+  serverSelectionTimeoutMS: 10000,
+}).then(() => {
+  console.log("✅ MongoDB connecté");
+}).catch(err => {
+  console.error("❌ Erreur MongoDB :", err);
+  process.exit(1);
+});
 
 const ContentModel = mongoose.model('contents', ContentSchema);
 
-/**
- * 🔹 Récupérer les détails d’un film depuis TMDB
- */
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function fetchMovieDetails(movieId: number) {
   try {
-    // 🔹 Récupérer les films en anglais (langue principale)
-    const responseEn = await axios.get(`${TMDB_URL}/movie/${movieId}`, {
+    const res = await axios.get(`${TMDB_URL}/movie/${movieId}`, {
       params: { api_key: TMDB_API_KEY, language: "en-US", append_to_response: "credits" }
     });
 
-    const movie = responseEn.data;
-    const originalLanguage = movie.original_language;
-
-    // 🔹 Récupérer les films dans leur langue d’origine (VO)
-    let responseVo;
-    try {
-      responseVo = await axios.get(`${TMDB_URL}/movie/${movieId}`, {
-        params: { api_key: TMDB_API_KEY, language: originalLanguage }
-      });
-    } catch (error) {
-      console.warn(`⚠️ Pas de version VO trouvée pour ${movie.title}`);
-    }
-
-    const movieVo = responseVo ? responseVo.data : null;
+    const movie = res.data;
 
     return {
-      title: movie.title || "Unknown Title", // 🔹 Anglais par défaut
-      title_vo: movieVo?.title || movie.original_title || "Unknown Title", // 🔹 Titre original
+      title: movie.title || "Unknown Title",
+      title_vo: movie.original_title || "Unknown Title",
       description: movie.overview || "",
-      description_vo: movieVo?.overview || movie.overview || "", // 🔹 Description originale
+      description_vo: movie.overview || "",
       type: "movie",
-      release_date: movie.release_date ? new Date(movie.release_date) : null, // ✅ Conversion pour MongoDB
+      release_date: movie.release_date ? new Date(movie.release_date) : null,
       genres: movie.genres?.map(g => g.name) || [],
       metadata: {
         language: movie.original_language || "unknown",
         publisher: movie.production_companies?.map(pc => pc.name).join(", ") || "",
-        director: movie.credits.crew.find(person => person.job === "Director")?.name || "",
-        actors: movie.credits.cast?.map(actor => actor.name) || [],
+        director: movie.credits.crew.find(p => p.job === "Director")?.name || "",
+        actors: movie.credits.cast?.map(a => a.name) || [],
         duration: movie.runtime || 0
       },
       likes_count: 0,
-      average_rating: 0, // Géré par les utilisateurs
+      average_rating: 0,
+      comments_count: 0,
+      reviews_count: 0,
       image_url: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : ""
     };
-  } catch (error) {
-    console.error(`❌ Erreur lors de la récupération du film ${movieId} :`, error.message);
+  } catch (e: any) {
+    console.warn(`⚠️ Erreur détails film ${movieId}: ${e.message}`);
     return null;
   }
 }
 
-/**
- * 🔹 Récupérer une page de films populaires depuis TMDB
- */
-async function fetchMoviesByPage(page: number) {
+async function upsertMovie(movie: any) {
   try {
-    const response = await axios.get(`${TMDB_URL}/movie/popular`, {
-      params: { api_key: TMDB_API_KEY, language: "en-US", page }
+    const existing = await ContentModel.findOne({
+      type: "movie",
+      title: movie.title,
+      release_date: movie.release_date
     });
 
-    return response.data.results || [];
-  } catch (error) {
-    console.error(`❌ Erreur lors de la récupération des films (page ${page}) :`, error.message);
+    if (existing) {
+      movie.likes_count = existing.likes_count;
+      movie.average_rating = existing.average_rating;
+      movie.comments_count = existing.comments_count;
+      movie.reviews_count = existing.reviews_count;
+    }
+
+    await ContentModel.findOneAndUpdate(
+      { type: "movie", title: movie.title, release_date: movie.release_date },
+      { $set: movie },
+      { upsert: true, new: true }
+    );
+
+    console.log(`✅ ${existing ? "Mis à jour" : "Ajouté"} : ${movie.title}`);
+  } catch (error: any) {
+    console.error(`❌ Erreur upsert ${movie.title} :`, error.message);
+  }
+}
+
+async function fetchMoviesByYear(year: number, page: number) {
+  try {
+    const res = await axios.get(`${TMDB_URL}/discover/movie`, {
+      params: {
+        api_key: TMDB_API_KEY,
+        language: "en-US",
+        sort_by: "popularity.desc",
+        page,
+        primary_release_year: year
+      }
+    });
+
+    return res.data.results || [];
+  } catch (error: any) {
+    console.warn(`⚠️ Année ${year} - page ${page} : ${error.message}`);
     return [];
   }
 }
 
-/**
- * 🔹 Enregistre ou met à jour un film en base
- */
-async function upsertMovie(movie: any) {
-  try {
-    await ContentModel.findOneAndUpdate(
-      { type: "movie", title: movie.title, release_date: movie.release_date }, // Critère d'unicité
-      { $set: movie }, // Met à jour si existant
-      { upsert: true, new: true }
-    );
-    console.log(`✅ Film ajouté/mis à jour : ${movie.title}`);
-  } catch (error) {
-    console.error(`❌ Erreur lors de l'upsert du film ${movie.title} :`, error.message);
+async function importYear(year: number) {
+  console.log(`\n📅 === Début de l'import pour ${year} ===`);
+
+  let totalImported = 0;
+
+  for (let page = 1; page <= MAX_PAGES_PER_YEAR; page++) {
+    console.log(`➡️ Année ${year} | Page ${page}/${MAX_PAGES_PER_YEAR}`);
+
+    const results = await fetchMoviesByYear(year, page);
+    if (results.length === 0) {
+      console.log(`⛔️ Aucune donnée sur page ${page}, arrêt de l'année ${year}`);
+      break;
+    }
+
+    const details = await Promise.all(results.map(m => fetchMovieDetails(m.id)));
+    const valid = details.filter(m => m !== null);
+
+    for (const movie of valid) {
+      await upsertMovie(movie);
+      totalImported++;
+    }
+
+    console.log(`✅ Page ${page} de ${year} : ${valid.length} films importés (total: ${totalImported})`);
+
+    await sleep(THROTTLE_MS);
   }
+
+  console.log(`\n📦 Année ${year} terminée : ${totalImported} films importés\n`);
 }
 
-/**
- * 🔹 Importer un grand nombre de films par pagination
- */
-async function importMovies() {
-  let totalMoviesImported = 0;
 
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    if (totalMoviesImported >= MAX_TOTAL_MOVIES) break; // Arrête l'import si on atteint la limite
-
-    console.log(`📡 Récupération des films (page ${page}/${MAX_PAGES})...`);
-    const movies = await fetchMoviesByPage(page);
-
-    if (movies.length === 0) break; // Arrête si plus de pages
-
-    console.log("📡 Récupération des détails des films...");
-    const moviesDetails = await Promise.all(movies.map(movie => fetchMovieDetails(movie.id)));
-
-    // 🔹 Filtrer les erreurs null
-    const validMovies = moviesDetails.filter(movie => movie !== null);
-
-    console.log(`📥 Insertion/Mise à jour de ${validMovies.length} films dans MongoDB...`);
-    await Promise.all(validMovies.map(movie => upsertMovie(movie)));
-
-    totalMoviesImported += validMovies.length;
-    console.log(`✅ ${totalMoviesImported} films importés jusqu'à présent.`);
+async function importAllYears() {
+  for (let year = START_YEAR; year >= END_YEAR; year--) {
+    await importYear(year);
   }
 
-  console.log(`🚀 Importation terminée. ${totalMoviesImported} films ajoutés.`);
+  console.log("\n🎉 Importation terminée !");
   mongoose.connection.close();
 }
 
-// 🔹 Lancer le script
-importMovies();
+importAllYears();

@@ -9,6 +9,7 @@ import { ContentsModule } from './modules/contents/contents.module';
 import { ReviewsModule } from './modules/reviews/reviews.module'; // 👈 ajouter cette ligne
 import configuration from './config/configuration';
 import { MongooseModule } from '@nestjs/mongoose';
+import { SearchModule } from './modules/search/search.module';
 
 @Module({
   imports: [
@@ -28,7 +29,8 @@ import { MongooseModule } from '@nestjs/mongoose';
     AuthModule,
     FollowersModule,
     ContentsModule,
-    ReviewsModule, // 👈 ajoute le module ici
+    ReviewsModule,
+    SearchModule, // 👈 ajoute le module ici
   ],
   controllers: [AppController],
 })
