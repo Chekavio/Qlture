@@ -12,6 +12,7 @@ import { FollowersService } from './followers.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('followers')
 @ApiBearerAuth('JWT-auth')
@@ -83,6 +84,7 @@ export class FollowersController {
   }
 
   @Get(':userId/followers/count')
+  @Public()
   @ApiOperation({ summary: 'Obtenir le nombre de followers d\'un utilisateur' })
   @ApiParam({
     name: 'userId',
@@ -101,6 +103,7 @@ export class FollowersController {
   }
 
   @Get(':userId/following/count')
+  @Public()
   @ApiOperation({ summary: 'Obtenir le nombre d\'utilisateurs suivis par un utilisateur' })
   @ApiParam({
     name: 'userId',

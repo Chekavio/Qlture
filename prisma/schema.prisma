@@ -62,6 +62,7 @@ model User {
   password                            String?
   firstName                           String?
   lastName                            String?
+  description                         String?         @db.VarChar(500)
   avatar                              String?
   provider                            String?
   providerId                          String?

@@ -21,23 +21,90 @@ export class SearchService {
           compound: {
             should: [
               {
-                autocomplete: {
-                  path: 'title',
+                text: {
                   query: q,
-                  fuzzy: { maxEdits: 1, prefixLength: 1 },
-                },
+                  path: "title",
+                  score: { boost: { value: 10 } },
+                  fuzzy: {
+                    maxEdits: 2,
+                    prefixLength: 1
+                  }
+                }
               },
               {
-                autocomplete: {
-                  path: 'title_vo',
+                text: {
                   query: q,
-                  fuzzy: { maxEdits: 1, prefixLength: 1 },
-                },
+                  path: "title_vo",
+                  score: { boost: { value: 5 } },
+                  fuzzy: {
+                    maxEdits: 2,
+                    prefixLength: 1
+                  }
+                }
               },
+              {
+                text: {
+                  query: q,
+                  path: "title",
+                  score: { boost: { value: 8 } },
+                  fuzzy: {
+                    maxEdits: 1,
+                    prefixLength: 3
+                  }
+                }
+              },
+              {
+                text: {
+                  query: q,
+                  path: "title_vo",
+                  score: { boost: { value: 4 } },
+                  fuzzy: {
+                    maxEdits: 1,
+                    prefixLength: 3
+                  }
+                }
+              },
+              {
+                phrase: {
+                  query: q,
+                  path: "title",
+                  score: { boost: { value: 15 } },
+                  slop: 0
+                }
+              },
+              {
+                phrase: {
+                  query: q,
+                  path: "title_vo",
+                  score: { boost: { value: 7 } },
+                  slop: 0
+                }
+              }
             ],
-            minimumShouldMatch: 1,
-          },
-        },
+            minimumShouldMatch: 1
+          }
+        }
+      });
+
+      // Add fields we want to return
+      pipeline.push({
+        $project: {
+          _id: 1,
+          title: 1,
+          title_vo: 1,
+          type: 1,
+          genres: 1,
+          image_url: 1,
+          release_date: 1,
+          score: { $meta: "searchScore" }
+        }
+      });
+
+      // Sort by search score
+      pipeline.push({
+        $sort: {
+          score: -1
+        }
       });
     }
 
@@ -88,6 +155,7 @@ export class SearchService {
               average_rating: 1,
               image_url: 1,
               genres: { $ifNull: ['$genres', []] },
+              score: 1,
             },
           },
         ],

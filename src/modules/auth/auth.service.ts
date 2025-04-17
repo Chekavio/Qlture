@@ -87,13 +87,15 @@ export class AuthService {
       email: pendingUser.email,
       username: pendingUser.username,
       password: pendingUser.password, // Already hashed from initiateSignUp
-      firstName: pendingUser.firstName || '',
-      lastName: pendingUser.lastName || '',
+      firstName: pendingUser.firstName || undefined,
+      lastName: pendingUser.lastName || undefined,
       provider: 'local',
       isActive: true,
-      isEmailVerified: true,
-      lastLogin: new Date(),
+      isEmailVerified: true
     });
+
+    // Update last login
+    await this.userService.updateLastLogin(user.id);
 
     // Clean up pending user
     await this.prisma.pendingUser.delete({
@@ -123,7 +125,7 @@ export class AuthService {
     }
 
     // Update last login
-    await this.userService.update(user.id, { lastLogin: new Date() });
+    await this.userService.updateLastLogin(user.id);
 
     // Generate tokens
     const tokens = this.tokenService.generateTokens(user);
@@ -155,17 +157,12 @@ export class AuthService {
         lastName: profile.name?.familyName,
         avatar: profile.photos?.[0]?.value,
         isActive: true,
-        isEmailVerified: true,
-        lastLogin: new Date(),
-      });
-    } else {
-      // Update last login and OAuth info if the user exists
-      user = await this.userService.update(user.id, {
-        lastLogin: new Date(),
-        provider,
-        providerId: profile.id,
+        isEmailVerified: true
       });
     }
+
+    // Update last login
+    await this.userService.updateLastLogin(user.id);
 
     // Generate tokens
     const tokens = this.tokenService.generateTokens(user);

@@ -4,6 +4,7 @@ export interface IUser {
   username: string;
   firstName?: string;
   lastName?: string;
+  description?: string;
   avatar?: string;
   provider?: string;
   providerId?: string;

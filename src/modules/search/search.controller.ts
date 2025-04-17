@@ -2,23 +2,20 @@ import {
   Controller,
   Get,
   Query,
-  UseGuards,
   BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
-  ApiBearerAuth,
   ApiResponse,
   ApiQuery,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SearchService } from './search.service';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { SearchResultDto } from './dto/search-result.dto';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('search')
-@ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard)
+@Public()
 @Controller('search')
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}

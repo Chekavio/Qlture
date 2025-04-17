@@ -16,10 +16,11 @@ export class MetadataDto {
   @IsString()
   language?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ type: [String] })
   @IsOptional()
-  @IsString()
-  publisher?: string;
+  @IsArray()
+  @IsString({ each: true })
+  publisher?: string[];
 
   @ApiPropertyOptional()
   @IsOptional()

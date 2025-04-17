@@ -22,6 +22,7 @@ import {
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
+import { BadRequestException } from '@nestjs/common';
 
 @ApiTags('Contents')
 @Controller('contents')
@@ -51,12 +52,73 @@ export class ContentsController {
   }
 
   @Public()
+  @Get('monthly-releases')
+  @ApiOperation({ summary: 'Get current month releases ranked by rating' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ 
+    name: 'type', 
+    required: false, 
+    enum: ['movie', 'book', 'game', 'album'],
+    description: 'Filter by content type'
+  })
+  @ApiResponse({ status: 200, description: 'List of current month releases.' })
+  async getCurrentMonthReleases(
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+    @Query('type') type?: 'movie' | 'book' | 'game' | 'album',
+  ) {
+    return this.contentsService.getCurrentMonthReleases(
+      Number(page),
+      Number(limit),
+      type,
+    );
+  }
+
+  @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Récupérer un contenu par son ID' })
   @ApiResponse({ status: 200, description: 'Contenu trouvé.' })
   @ApiResponse({ status: 404, description: 'Contenu non trouvé.' })
   async getContentById(@Param('id') id: string) {
     return this.contentsService.getContentById(id);
+  }
+
+  @Public()
+  @Get('decade/:decade')
+  @ApiOperation({ summary: 'Get content from a specific decade' })
+  @ApiParam({ 
+    name: 'decade', 
+    description: 'Decade number: Use 2 digits for 1900s/2000s (e.g., 20 for 1920s if < 40, 2020s if >= 40), or full year for other centuries (e.g., 1820 for 1820s)',
+    type: Number
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ 
+    name: 'type', 
+    required: false, 
+    enum: ['movie', 'book', 'game', 'album'],
+    description: 'Filter by content type'
+  })
+  @ApiResponse({ status: 200, description: 'List of content from the specified decade.' })
+  @ApiResponse({ status: 400, description: 'Invalid decade parameter.' })
+  async getDecadeContent(
+    @Param('decade') decade: number,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+    @Query('type') type?: 'movie' | 'book' | 'game' | 'album',
+  ) {
+    // Validate decade parameter
+    decade = Number(decade);
+    if (isNaN(decade) || decade < 0) {
+      throw new BadRequestException('Decade must be a positive number');
+    }
+    return this.contentsService.getDecadeContent(
+      decade,
+      Number(page),
+      Number(limit),
+      type,
+    );
   }
 
   @UseGuards(OptionalJwtAuthGuard) // Déplacé avant @Public pour s'assurer qu'il est appliqué en premier
