@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ReviewCommentLike } from './review_comment_likes.schema';
 import { ReviewComment } from '../review_comments.schema';
+import { ReviewsService } from '../../reviews.service';
 
 @Injectable()
 export class ReviewCommentLikesService {
@@ -11,6 +12,7 @@ export class ReviewCommentLikesService {
     private readonly likeModel: Model<ReviewCommentLike>,
     @InjectModel(ReviewComment.name)
     private readonly commentModel: Model<ReviewComment>,
+    private readonly reviewsService: ReviewsService,
   ) {}
 
   async toggleLike(commentId: string, userId: string): Promise<{ liked: boolean }> {
@@ -22,16 +24,12 @@ export class ReviewCommentLikesService {
 
     if (existing) {
       await this.likeModel.deleteOne({ _id: existing._id });
-      await this.commentModel.findByIdAndUpdate(commentId, {
-        $inc: { likesCount: -1 },
-      });
+      await this.reviewsService.updateCommentLikesCount(commentId);
       return { liked: false };
     }
 
     await this.likeModel.create({ commentId, userId });
-    await this.commentModel.findByIdAndUpdate(commentId, {
-      $inc: { likesCount: 1 },
-    });
+    await this.reviewsService.updateCommentLikesCount(commentId);
     return { liked: true };
   }
 

@@ -42,14 +42,15 @@ export class SearchQueryDto {
   genres?: string[];
 
   @ApiPropertyOptional({
-    description: 'Page de pagination (1 par défaut)',
+    description: 'Numéro de page pour la pagination (page + skip)',
+    type: Number,
     default: 1,
   })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page?: number;
+  page?: number = 1;
 
   @ApiPropertyOptional({
     description: 'Nombre de résultats par page (20 par défaut)',
@@ -69,4 +70,7 @@ export class SearchQueryDto {
   @IsOptional()
   @IsIn(['date_desc', 'date_asc', 'rating_desc', 'rating_asc'])
   sort?: string;
+
+  // --- Suppression des anciens paramètres cursor ---
+  // after, afterScore, afterId supprimés
 }

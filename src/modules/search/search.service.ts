@@ -9,8 +9,7 @@ export class SearchService {
   constructor(@InjectModel(Content.name) private contentModel: Model<Content>) {}
 
   async searchContent(queryDto: SearchQueryDto) {
-    const { q, type, genres, sort, page = 1, limit = 20 } = queryDto;
-    const skip = (page - 1) * limit;
+    const { q, type, genres, sort, limit = 20, page = 1 } = queryDto;
     const pipeline: any[] = [];
 
     // 🔍 Recherche simple avec compound (title + title_vo)
@@ -85,8 +84,6 @@ export class SearchService {
           }
         }
       });
-
-      // Add fields we want to return
       pipeline.push({
         $project: {
           _id: 1,
@@ -99,15 +96,13 @@ export class SearchService {
           score: { $meta: "searchScore" }
         }
       });
-
-      // Sort by search score
       pipeline.push({
         $sort: {
-          score: -1
+          score: -1,
+          _id: 1
         }
       });
     }
-
     // 🎯 Filtres facultatifs
     const matchStage: Record<string, any> = {};
     if (type) matchStage.type = type;
@@ -117,60 +112,37 @@ export class SearchService {
     if (Object.keys(matchStage).length > 0) {
       pipeline.push({ $match: matchStage });
     }
-
-    // 🔀 Tri custom
-    if (sort) {
-      let sortStage: Record<string, any> = {};
-      switch (sort) {
-        case 'date_asc':
-          sortStage = { release_date: 1 };
-          break;
-        case 'rating_desc':
-          sortStage = { average_rating: -1 };
-          break;
-        case 'rating_asc':
-          sortStage = { average_rating: 1 };
-          break;
-        case 'date_desc':
-        default:
-          sortStage = { release_date: -1 };
-          break;
+    // 📦 Résultats + pagination skip/page
+    const skip = (page - 1) * limit;
+    pipeline.push(
+      { $skip: skip },
+      { $limit: limit },
+      { $project: {
+          _id: 1,
+          title: 1,
+          title_vo: 1,
+          type: 1,
+          release_date: 1,
+          average_rating: 1,
+          image_url: 1,
+          genres: { $ifNull: ['$genres', []] },
+          score: 1,
+        }
       }
-      pipeline.push({ $sort: sortStage });
-    }
-
-    // 📦 Résultats + pagination
-    pipeline.push({
-      $facet: {
-        results: [
-          { $skip: skip },
-          { $limit: limit },
-          {
-            $project: {
-              _id: 1,
-              title: 1,
-              title_vo: 1,
-              type: 1,
-              release_date: 1,
-              average_rating: 1,
-              image_url: 1,
-              genres: { $ifNull: ['$genres', []] },
-              score: 1,
-            },
-          },
-        ],
-        totalCount: [{ $count: 'count' }],
-      },
-    });
-
-    const result = await this.contentModel.aggregate(pipeline).exec();
-    const total = result[0]?.totalCount[0]?.count || 0;
-
+    );
+    // Total count
+    const countPipeline = pipeline.slice(0, pipeline.length - 3).concat([{ $count: 'count' }]);
+    const [results, totalArr] = await Promise.all([
+      this.contentModel.aggregate(pipeline).exec(),
+      this.contentModel.aggregate(countPipeline).exec()
+    ]);
+    const total = totalArr[0]?.count || 0;
     return {
-      results: result[0].results,
+      results,
       total,
-      page,
       limit,
+      page,
+      totalPages: Math.ceil(total / limit)
     };
   }
 }

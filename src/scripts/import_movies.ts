@@ -11,7 +11,7 @@ const MONGO_URI = process.env.MONGODB_URI!;
 const TMDB_API_KEY = process.env.TMDB_API_KEY!;
 const TMDB_URL = "https://api.themoviedb.org/3";
 
-const START_YEAR = 2022; // reprendre à 2017
+const START_YEAR = 2017; // reprendre à 2017
 const END_YEAR = 1950;
 const MAX_PAGES_PER_YEAR = 500;
 const CONCURRENCY = 2;

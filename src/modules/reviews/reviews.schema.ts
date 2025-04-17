@@ -7,10 +7,10 @@ export class Review extends Document {
   userId: string;
 
   @Prop({ required: true })
-contentId: string;
+  contentId: string;
 
-  @Prop({ required: true, min: 0.5, max: 5 })
-  rating: number;
+  @Prop({ required: false, min: 0.5, max: 5 })
+  rating?: number;
 
   @Prop()
   reviewText?: string;

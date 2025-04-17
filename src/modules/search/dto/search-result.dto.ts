@@ -31,8 +31,10 @@ export class SearchResultDto {
   total: number;
 
   @ApiProperty()
-  page: number;
-
-  @ApiProperty()
   limit: number;
+
+  @ApiProperty({ required: false })
+  after?: string;
+
+  // Removed page for cursor-based pagination
 }

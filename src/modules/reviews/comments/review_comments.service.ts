@@ -27,7 +27,7 @@ export class ReviewCommentsService {
 
   async create(reviewId: string, userId: string, comment: string, parentCommentId?: string) {
     const review = await this.reviewModel.findById(reviewId);
-    if (!review) throw new NotFoundException('Review introuvable');
+    if (!review) throw new NotFoundException('Review not found');
 
     let finalComment = comment;
 
@@ -48,24 +48,23 @@ export class ReviewCommentsService {
       reviewId,
       userId,
       comment: finalComment,
-      parentCommentId: parentCommentId || null,
+      parentCommentId: parentCommentId ?? null,
+      likesCount: 0,
     });
-
-    await this.reviewsService.incrementReviewCommentsCount(reviewId, 1);
+    // MAJ compteur de commentaires sur la review
+    await this.reviewsService.updateReviewCommentsCount(reviewId);
     return created;
   }
 
   async delete(commentId: string, userId: string) {
     const comment = await this.commentModel.findById(commentId);
     if (!comment) throw new NotFoundException('Commentaire introuvable');
-
-    if (comment.userId !== userId) {
-      throw new ForbiddenException('Non autorisé à supprimer ce commentaire');
-    }
-
+    if (comment.userId !== userId) throw new ForbiddenException('Non autorisé');
+    const reviewId = comment.reviewId;
     await this.commentModel.deleteOne({ _id: commentId });
     await this.likeModel.deleteMany({ commentId });
-    await this.reviewsService.incrementReviewCommentsCount(comment.reviewId, -1);
+    // MAJ compteur de commentaires sur la review
+    await this.reviewsService.updateReviewCommentsCount(reviewId);
 
     return { deleted: true };
   }
@@ -126,7 +125,7 @@ export class ReviewCommentsService {
       totalPages: Math.ceil(total / limit),
     };
   }
- 
+
   async getCommentsForReview(
     reviewId: string,
     userId?: string,
@@ -135,13 +134,13 @@ export class ReviewCommentsService {
     sort: 'date_desc' | 'date_asc' | 'likes_desc' = 'date_desc',
   ) {
     const skip = (page - 1) * limit;
-  
+
     const sortMap: Record<typeof sort, Record<string, SortOrder>> = {
       date_desc: { createdAt: -1 },
       date_asc: { createdAt: 1 },
       likes_desc: { likesCount: -1, createdAt: 1 },
     };
-  
+
     const [rawComments, total] = await Promise.all([
       this.commentModel
         .find({ reviewId, parentCommentId: null })
@@ -151,9 +150,9 @@ export class ReviewCommentsService {
         .lean(),
       this.commentModel.countDocuments({ reviewId, parentCommentId: null }),
     ]);
-  
+
     const userIds = [...new Set(rawComments.map((c) => c.userId))] as string[];
-  
+
     const [users, likedCommentIds] = await Promise.all([
       this.prisma.user.findMany({
         where: { id: { in: userIds } },
@@ -168,10 +167,10 @@ export class ReviewCommentsService {
             .distinct('commentId')
         : [],
     ]);
-  
+
     const usersMap = Object.fromEntries(users.map((u) => [u.id, u]));
     const likedSet = new Set(likedCommentIds.map(String));
-  
+
     const enriched = rawComments.map((c) => ({
       id: c._id,
       comment: c.comment,
@@ -184,7 +183,7 @@ export class ReviewCommentsService {
       likesCount: c.likesCount || 0,
       isLiked: likedSet.has(String(c._id)),
     }));
-  
+
     return {
       data: enriched,
       total,
@@ -192,7 +191,4 @@ export class ReviewCommentsService {
       totalPages: Math.ceil(total / limit),
     };
   }
-  
-  
-  
 }

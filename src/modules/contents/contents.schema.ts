@@ -26,6 +26,7 @@ export class Content extends Document {
 
   @Prop({ type: Object })
   metadata: {
+    subtitle?: string;
     language?: string;
     publisher?: string[];
     director?: string;

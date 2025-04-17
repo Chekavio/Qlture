@@ -1,6 +1,6 @@
 export type PublicReview = {
     id: any;
-    rating: number;
+    rating?: number;
     reviewText?: string;
     date: Date;
     user: {
@@ -13,5 +13,4 @@ export type PublicReview = {
     isCurrentUser: boolean;
     isLiked: boolean;
     comments: any[]; // Tu peux typer ça plus précisément si tu veux
-  };
-  
+};

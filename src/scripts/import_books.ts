@@ -2,8 +2,8 @@ import axios from 'axios';
 import mongoose from 'mongoose';
 import pLimit from 'p-limit';
 import * as fs from 'fs';
-import * as dotenv from 'dotenv';
 import * as path from 'path';
+import * as dotenv from 'dotenv';
 import { Content, ContentSchema } from '../modules/contents/contents.schema';
 import { model } from 'mongoose';
 
@@ -12,13 +12,21 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 const MONGO_URI = process.env.MONGODB_URI!;
 const isTestMode = process.argv.includes('--test');
 const isReset = process.argv.includes('--reset');
-const MAX_PAGES = isTestMode ? 2 : 1000;
+const MAX_PAGES = isTestMode ? 1 : 300;
 const CONCURRENCY = 5;
-const PROGRESS_FILE = 'last_page.txt';
+const PROGRESS_DIR = './progress_books';
 
 const ContentModel = model('Content', ContentSchema);
 const limit = pLimit(CONCURRENCY);
 const authorCache = new Map<string, string>();
+
+const popularSubjects = [
+  'fiction', 'science fiction', 'fantasy', 'romance', 'mystery',
+  'thriller', 'historical fiction', 'philosophy', 'biography',
+  'poetry', 'drama', 'psychology'
+];
+
+if (!fs.existsSync(PROGRESS_DIR)) fs.mkdirSync(PROGRESS_DIR);
 
 function parseDate(input?: string): Date | null {
   if (!input) return null;
@@ -42,22 +50,27 @@ async function fetchEdition(id: string) {
   try {
     const res = await axios.get(`https://openlibrary.org/books/${id}.json`);
     return res.data;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 async function fetchWork(id: string) {
   try {
     const res = await axios.get(`https://openlibrary.org${id}.json`);
     return res.data;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 async function fetchIsbnData(isbn: string) {
   try {
-    const url = `https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&jscmd=data&format=json`;
-    const res = await axios.get(url);
+    const res = await axios.get(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&jscmd=data&format=json`);
     return res.data[`ISBN:${isbn}`] || null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 async function fetchAuthorName(key: string) {
@@ -67,16 +80,40 @@ async function fetchAuthorName(key: string) {
     const name = res.data?.name;
     if (name) authorCache.set(key, name);
     return name;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
+}
+
+async function fetchFromGoogleBooks(isbn: string): Promise<{
+  authors?: string[];
+  image_url?: string;
+}> {
+  try {
+    const res = await axios.get('https://www.googleapis.com/books/v1/volumes', {
+      params: {
+        q: `isbn:${isbn}`,
+        key: process.env.GOOGLE_BOOKS_API_KEY
+      }
+    });
+
+    const item = res.data.items?.[0]?.volumeInfo;
+    if (!item) return {};
+
+    return {
+      authors: item.authors,
+      image_url: item.imageLinks?.thumbnail?.replace('http:', 'https:')
+    };
+  } catch (err) {
+    console.warn(`⚠️ Erreur Google Books pour ISBN ${isbn}: ${err.message}`);
+    return {};
+  }
 }
 
 function extractDescription(edition: any, work: any): string {
   return typeof edition.description === 'string'
     ? edition.description
-    : edition.description?.value ||
-      work?.description?.value ||
-      work?.description ||
-      '';
+    : edition.description?.value || work?.description?.value || work?.description || '';
 }
 
 async function resolveAuthors(edition: any, work: any): Promise<string[]> {
@@ -113,29 +150,37 @@ function buildGenres(edition: any, work: any, fallback: any): string[] {
   ].filter(Boolean).slice(0, 10);
 }
 
-async function fetchPageWithRetry(page: number, retries = 3): Promise<any[]> {
+async function fetchBooksBySubject(subject: string, page: number, retries = 3): Promise<any[]> {
   for (let i = 0; i < retries; i++) {
     try {
       const res = await axios.get('https://openlibrary.org/search.json', {
         params: {
-          q: '*',
+          q: subject,
           sort: 'editions',
           limit: 100,
           page,
-          fields: 'key,title,author_name,edition_key'
+          fields: 'key,title,author_name,edition_key,subject'
         }
       });
       return res.data.docs || [];
     } catch (err: any) {
-      console.warn(`⚠️ Erreur page ${page} (tentative ${i + 1}/${retries}): ${err.message}`);
+      console.warn(`⚠️ Erreur sujet "${subject}", page ${page} (tentative ${i + 1}): ${err.message}`);
       await new Promise(r => setTimeout(r, 1500));
     }
   }
-  console.error(`❌ Abandon de la page ${page} après ${retries} échecs.`);
   return [];
 }
 
-async function upsertBook(editionId: string) {
+function shouldIgnoreBook(book: any): boolean {
+  const unwanted = ['children', 'juvenile', 'calendar', 'agenda', 'notebook', 'activity books'];
+  const subjects = (book.subject || []).map((s: string) => s.toLowerCase());
+  const title = book.title?.toLowerCase() || '';
+  return unwanted.some(word =>
+    subjects.includes(word) || title.includes(word)
+  );
+}
+
+async function upsertBook(editionId: string, subject?: string) {
   const edition = await fetchEdition(editionId);
   if (!edition) return;
 
@@ -150,6 +195,7 @@ async function upsertBook(editionId: string) {
 
   const title = edition.title || fallback?.title || 'Untitled';
   const release_date = parseDate(edition.publish_date || fallback?.publish_date);
+  const subtitle = edition.subtitle || fallback?.subtitle || '';
 
   const languages = (edition.languages || fallback?.languages || [])
     .map((l: any) => l?.key?.split('/').pop())
@@ -159,16 +205,40 @@ async function upsertBook(editionId: string) {
     .map((l: any) => l?.key?.split('/').pop())
     .filter(Boolean);
 
-  const description = extractDescription(edition, work);
-  const authors = await resolveAuthors(edition, work);
+  let authors = await resolveAuthors(edition, work);
+  let image_url = buildImageUrl(edition, fallback);
+
+  if (isbn && (!authors.length || !image_url)) {
+    const googleData = await fetchFromGoogleBooks(isbn);
+
+    if (!authors.length && googleData.authors?.length) {
+      authors = googleData.authors;
+    }
+
+    if (!image_url && googleData.image_url) {
+      image_url = googleData.image_url;
+    }
+
+    if (googleData.authors?.length || googleData.image_url) {
+      console.log(`🔄 Complété via Google Books : ${title}`);
+    }
+  }
+
   const publishers = edition.publishers || fallback?.publishers?.map((p: any) => p.name) || [];
   const page_count = parsePageCount(edition) || fallback?.number_of_pages || null;
   const publish_country = edition.publish_country || '';
   const publish_places = edition.publish_places || (fallback?.publish_places?.map((p: any) => p.name) || []);
-  const image_url = buildImageUrl(edition, fallback);
   const genres = buildGenres(edition, work, fallback);
 
+  // Ajouter subject comme genre s'il n'est pas déjà dedans
+  if (subject) {
+    const normalizedSubject = subject.trim().toLowerCase();
+    const alreadyIncluded = genres.some(g => g.trim().toLowerCase() === normalizedSubject);
+    if (!alreadyIncluded) genres.unshift(subject);
+  }
+
   const metadata = {
+    subtitle,
     authors,
     publisher: publishers,
     page_count,
@@ -193,8 +263,8 @@ async function upsertBook(editionId: string) {
     title,
     title_vo: title,
     type: 'book',
-    description,
-    description_vo: description,
+    description: extractDescription(edition, work),
+    description_vo: extractDescription(edition, work),
     release_date,
     genres,
     languages,
@@ -211,6 +281,7 @@ async function upsertBook(editionId: string) {
     data,
     { upsert: true, new: true }
   );
+
   console.log(`✅ ${title}`);
 }
 
@@ -219,33 +290,42 @@ async function importBooks() {
   console.log('✅ Mongo connecté');
 
   if (isReset) {
-    console.log('♻️ Reset activé : suppression des livres et du fichier de progression');
+    console.log('♻️ Reset activé : suppression de tous les livres');
     await ContentModel.deleteMany({ type: 'book' });
-    if (fs.existsSync(PROGRESS_FILE)) fs.unlinkSync(PROGRESS_FILE);
+    fs.rmSync(PROGRESS_DIR, { recursive: true, force: true });
+    fs.mkdirSync(PROGRESS_DIR);
   }
 
-  let startPage = 806;
-  // if (fs.existsSync(PROGRESS_FILE)) {
-  //   const val = parseInt(fs.readFileSync(PROGRESS_FILE, 'utf8'));
-  //   if (!isNaN(val)) startPage = val;
-  // }
+  for (const subject of popularSubjects) {
+    console.log(`📚 Sujet : ${subject}`);
+    const progressFile = path.join(PROGRESS_DIR, `last_page_${subject.replace(/\s/g, '_')}.txt`);
+    let startPage = 1;
 
-  for (let page = startPage; page <= MAX_PAGES; page++) {
-    console.log(`➡️ Page ${page}/${MAX_PAGES}`);
-    // fs.writeFileSync(PROGRESS_FILE, `${page + 1}`);
+    if (fs.existsSync(progressFile)) {
+      const val = parseInt(fs.readFileSync(progressFile, 'utf8'));
+      if (!isNaN(val)) startPage = val;
+    }
 
-    const books = await fetchPageWithRetry(page);
-    const tasks = books
-      .map(book => book.edition_key?.[0])
-      .filter(Boolean)
-      .map(editionId => limit(() => upsertBook(editionId)));
+    for (let page = startPage; page <= MAX_PAGES; page++) {
+      console.log(`➡️ [${subject}] Page ${page}/${MAX_PAGES}`);
+      fs.writeFileSync(progressFile, `${page + 1}`);
 
-    await Promise.all(tasks);
+      const books = await fetchBooksBySubject(subject, page);
+      const validBooks = books
+        .filter(book => !shouldIgnoreBook(book))
+        .map(book => book.edition_key?.[0])
+        .filter(Boolean);
+
+      const tasks = validBooks.map(editionId => limit(() => upsertBook(editionId, subject)));
+      await Promise.all(tasks);
+    }
+
+    fs.unlinkSync(progressFile);
+    console.log(`✅ Sujet "${subject}" terminé`);
   }
 
-  // fs.unlinkSync(PROGRESS_FILE);
   await mongoose.disconnect();
-  console.log('✅ Import terminé');
+  console.log('✅ Import complet terminé !');
 }
 
 importBooks();
