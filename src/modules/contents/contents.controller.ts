@@ -288,13 +288,21 @@ export class ContentsController {
     );
   }
 
-  @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':id')
-  @ApiOperation({ summary: 'Récupérer un contenu par son ID' })
-  @ApiResponse({ status: 200, description: 'Contenu trouvé.' })
-  @ApiResponse({ status: 404, description: 'Contenu non trouvé.' })
-  async getContentById(@Param('id') id: string) {
-    return this.contentsService.getContentById(id);
+  @ApiOperation({ summary: 'Get content by ID, with isLiked if user is logged in' })
+  @ApiParam({ name: 'id', type: 'string' })
+  @ApiBearerAuth('JWT-auth')
+  async getContentById(
+    @Param('id') id: string,
+    @CurrentUser('sub') userId?: string,
+  ) {
+    const content = await this.contentsService.getContentById(id);
+    let isLiked = false;
+    if (userId) {
+      isLiked = await this.contentsService.isContentLikedByUser(id, userId);
+    }
+    return { ...(content?.toJSON ? content.toJSON() : content), isLiked };
   }
 
   @Public()

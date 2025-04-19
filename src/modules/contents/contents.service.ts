@@ -214,4 +214,9 @@ export class ContentsService {
       return { liked: true };
     }
   }
+
+  async isContentLikedByUser(contentId: string, userId: string): Promise<boolean> {
+    const like = await this.contentLikeModel.findOne({ contentId, userId });
+    return !!like;
+  }
 }
