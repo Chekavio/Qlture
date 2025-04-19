@@ -36,4 +36,12 @@ export class ContentsRepository {
       .limit(limit)
       .exec();
   }
+
+  async findOne(filter: any): Promise<Content | null> {
+    return this.contentModel.findOne(filter).exec();
+  }
+
+  async findOneAndUpdate(filter: any, update: any, options: any): Promise<Content | null> {
+    return this.contentModel.findOneAndUpdate(filter, update, { ...options, new: true }).lean().exec();
+  }
 }

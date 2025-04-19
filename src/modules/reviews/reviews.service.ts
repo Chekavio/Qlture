@@ -423,4 +423,19 @@ export class ReviewsService {
       { likesCount }
     );
   }
+
+  // Récupérer toutes les reviews pour un utilisateur avec tri et filtres
+  async getAllReviewsForUser(userId: string, sort: string = 'updatedAt', order: 'asc' | 'desc' = 'desc') {
+    // Mapping des critères de tri
+    const sortFields: Record<string, string> = {
+      updatedAt: 'updatedAt',
+      createdAt: 'createdAt',
+      likes: 'likesCount',
+      comments: 'commentsCount',
+      rating: 'rating',
+    };
+    const sortField = sortFields[sort] || 'updatedAt';
+    const sortOrder = order === 'asc' ? 1 : -1;
+    return this.reviewModel.find({ userId }).sort({ [sortField]: sortOrder }).lean();
+  }
 }

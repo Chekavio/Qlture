@@ -21,7 +21,7 @@ const limit = pLimit(CONCURRENCY);
 const authorCache = new Map<string, string>();
 
 const popularSubjects = [
-  'fiction', 'science fiction', 'fantasy', 'romance', 'mystery',
+  'fantasy', 'romance', 'mystery',
   'thriller', 'historical fiction', 'philosophy', 'biography',
   'poetry', 'drama', 'psychology'
 ];
@@ -240,6 +240,7 @@ async function upsertBook(editionId: string, subject?: string) {
   const metadata = {
     subtitle,
     authors,
+    language: languages[0] || null,
     publisher: publishers,
     page_count,
     pagination: typeof edition.pagination === 'string' ? edition.pagination : null,
@@ -276,8 +277,17 @@ async function upsertBook(editionId: string, subject?: string) {
     comments_count: 0
   };
 
+  // Duplicate skip logic
+  const duplicate = await ContentModel.findOne({ type: 'book', title, release_date });
+  if (duplicate) {
+    console.log(`⏩ Skipped duplicate: ${title} (${release_date ? release_date.toISOString().slice(0,10) : 'no date'})`);
+    return;
+  }
+
   await ContentModel.findOneAndUpdate(
-    { type: 'book', title, release_date },
+    metadata.openlibrary_edition_id
+      ? { type: 'book', 'metadata.openlibrary_edition_id': metadata.openlibrary_edition_id }
+      : { type: 'book', title, release_date, 'metadata.subtitle': metadata.subtitle },
     data,
     { upsert: true, new: true }
   );

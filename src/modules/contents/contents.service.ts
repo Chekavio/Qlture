@@ -2,6 +2,45 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ContentsRepository } from './contents.repository';
 import { CreateContentDto } from './dto';
 
+// Utility function to ensure all fields are present for book content
+function completeBookDto(dto: Partial<CreateContentDto>): any {
+  return {
+    title: dto.title ?? '',
+    title_vo: dto.title_vo ?? '',
+    type: dto.type ?? 'book',
+    description: dto.description ?? '',
+    description_vo: dto.description_vo ?? '',
+    release_date: dto.release_date ?? null,
+    genres: dto.genres ?? [],
+    image_url: dto.image_url ?? '',
+    likes_count: dto.likes_count ?? 0,
+    average_rating: dto.average_rating ?? 0,
+    reviews_count: dto.reviews_count ?? 0,
+    comments_count: dto.comments_count ?? 0,
+    metadata: {
+      subtitle: dto.metadata?.subtitle ?? '',
+      authors: dto.metadata?.authors ?? [],
+      publisher: dto.metadata?.publisher ?? [],
+      page_count: dto.metadata?.page_count ?? null,
+      pagination: dto.metadata?.pagination ?? null,
+      isbn: dto.metadata?.isbn ?? null,
+      isbn_10: dto.metadata?.isbn_10 ?? null,
+      isbn_13: dto.metadata?.isbn_13 ?? null,
+      openlibrary_edition_id: dto.metadata?.openlibrary_edition_id ?? null,
+      work_id: dto.metadata?.work_id ?? null,
+      publish_country: dto.metadata?.publish_country ?? '',
+      publish_places: dto.metadata?.publish_places ?? [],
+      identifiers: dto.metadata?.identifiers ?? {},
+      series: dto.metadata?.series ?? [],
+      contributors: dto.metadata?.contributors ?? [],
+      translated_from: dto.metadata?.translated_from ?? [],
+      weight: dto.metadata?.weight ?? null,
+      physical_format: dto.metadata?.physical_format ?? null,
+      dimensions: dto.metadata?.dimensions ?? null,
+    }
+  };
+}
+
 @Injectable()
 export class ContentsService {
   constructor(private readonly contentsRepository: ContentsRepository) {}
@@ -11,7 +50,8 @@ export class ContentsService {
       dto.metadata.director = undefined;
     }
 
-    return this.contentsRepository.create(dto);
+    const fullDto = completeBookDto(dto);
+    return this.contentsRepository.create(fullDto);
   }
 
   async getAllContents(page: number, limit: number) {
@@ -86,5 +126,61 @@ export class ContentsService {
       limit,
       { average_rating: -1 }  // Sort by rating in descending order
     );
+  }
+
+  // Manual upsert for books, using the same logic as import_books.ts
+  async manualUpsertBook(dto: CreateContentDto) {
+    // Deduplication: skip if a book with the same title and release_date exists
+    const duplicate = await this.contentsRepository.findOne({
+      type: 'book',
+      title: dto.title,
+      release_date: dto.release_date,
+    });
+    if (duplicate) {
+      return { skipped: true, reason: 'Duplicate book found', content: duplicate };
+    }
+
+    // If openlibrary_edition_id is present in metadata, prefer upsert on that
+    let upsertQuery: any = { type: 'book', title: dto.title, release_date: dto.release_date };
+    if (dto.metadata && dto.metadata.openlibrary_edition_id) {
+      upsertQuery = { type: 'book', 'metadata.openlibrary_edition_id': dto.metadata.openlibrary_edition_id };
+    } else if (dto.metadata && dto.metadata.subtitle) {
+      upsertQuery = { type: 'book', title: dto.title, release_date: dto.release_date, 'metadata.subtitle': dto.metadata.subtitle };
+    }
+
+    // Insert or update (upsert)
+    const content = await this.contentsRepository.findOneAndUpdate(
+      upsertQuery,
+      dto,
+      { upsert: true, new: true }
+    );
+    return { skipped: false, content };
+  }
+
+  // Manual upsert for movies, using the same logic as import_movies.ts (deduplication, upsert)
+  async manualUpsertMovie(dto: CreateContentDto) {
+    // Deduplication: skip if a movie with the same title and release_date exists
+    const duplicate = await this.contentsRepository.findOne({
+      type: 'movie',
+      title: dto.title,
+      release_date: dto.release_date,
+    });
+    if (duplicate) {
+      return { skipped: true, reason: 'Duplicate movie found', content: duplicate };
+    }
+
+    // Upsert by title + release_date
+    const upsertQuery: any = { type: 'movie', title: dto.title, release_date: dto.release_date };
+    const content = await this.contentsRepository.findOneAndUpdate(
+      upsertQuery,
+      dto,
+      {}
+    );
+    return { skipped: false, content };
+  }
+
+  async patchContent(id: string, patch: Record<string, any>) {
+    // On ne modifie que les champs fournis dans le body
+    return this.contentsRepository.findOneAndUpdate({ _id: id }, patch, { new: true });
   }
 }

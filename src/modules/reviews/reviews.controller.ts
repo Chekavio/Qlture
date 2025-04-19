@@ -10,6 +10,7 @@ import {
     HttpCode,
     HttpStatus,
     Get,
+    Query,
   } from '@nestjs/common';
   import { ReviewsService } from './reviews.service';
   import { CreateReviewDto } from './dto/create-review.dto';
@@ -23,6 +24,7 @@ import {
     ApiParam,
     ApiResponse,
     ApiBody,
+    ApiQuery,
   } from '@nestjs/swagger';
   
   @ApiTags('reviews')
@@ -108,5 +110,33 @@ import {
       const review = await this.reviewsService.getUserReviewForContent(contentId, userId);
       if (!review) return { rating: undefined, reviewText: undefined };
       return { rating: review.rating, reviewText: review.reviewText };
+    }
+
+    @Get('user/:userId/all')
+    @ApiOperation({ summary: 'Récupérer toutes les reviews pour un utilisateur donné, avec tri et filtres' })
+    @ApiParam({ name: 'userId', type: 'string', description: 'ID du user' })
+    @ApiQuery({
+      name: 'sort',
+      required: false,
+      enum: ['updatedAt', 'createdAt', 'likes', 'comments', 'rating'],
+      description: 'Champ de tri : updatedAt (date de mise à jour), createdAt (date de création), likes (nombre de likes), comments (nombre de commentaires), rating (note)',
+      example: 'updatedAt',
+      schema: { default: 'updatedAt' }
+    })
+    @ApiQuery({
+      name: 'order',
+      required: false,
+      enum: ['asc', 'desc'],
+      description: 'Ordre de tri : asc (croissant) ou desc (décroissant)',
+      example: 'desc',
+      schema: { default: 'desc' }
+    })
+    @ApiResponse({ status: 200, description: 'Liste des reviews de l’utilisateur', schema: { example: [ { contentId: 'abc123', rating: 4.5, reviewText: 'Super film !', updatedAt: '2025-01-01T12:00:00Z', likesCount: 2, commentsCount: 1 } ] } })
+    async getAllReviewsForUser(
+      @Param('userId') userId: string,
+      @Query('sort') sort?: string,
+      @Query('order') order?: 'asc' | 'desc',
+    ) {
+      return this.reviewsService.getAllReviewsForUser(userId, sort, order);
     }
   }

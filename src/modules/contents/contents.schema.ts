@@ -3,78 +3,93 @@ import { Document } from 'mongoose';
 
 @Schema({ collection: 'contents', timestamps: true })
 export class Content extends Document {
-  @Prop({ required: true })
-  title: string;
+  @Prop({ type: String, default: null })
+  title: string | null;
 
-  @Prop({ required: true })
-  title_vo: string;
+  @Prop({ type: String, default: null })
+  title_vo: string | null;
 
-  @Prop({ required: true, enum: ['movie', 'book', 'game', 'album'] })
-  type: string;
+  @Prop({ type: String, enum: ['movie', 'book', 'game', 'album'], default: null })
+  type: string | null;
 
-  @Prop()
-  description: string;
+  @Prop({ type: String, default: null })
+  description: string | null;
 
-  @Prop()
-  description_vo: string;
+  @Prop({ type: String, default: null })
+  description_vo: string | null;
 
-  @Prop()
-  release_date: Date;
+  @Prop({ type: Date, default: null })
+  release_date: Date | null;
 
-  @Prop([String])
-  genres: string[];
+  @Prop({ type: [String], default: undefined })
+  genres: string[] | undefined;
 
-  @Prop({ type: Object })
+  @Prop({ type: Object, default: undefined })
   metadata: {
-    subtitle?: string;
-    language?: string;
-    publisher?: string[];
-    director?: string;
-    actors?: string[];
-    platforms?: string[];
-    developers?: string[];
-    authors?: string[];
-    page_count?: number;
-    pagination?: string;
-    isbn?: string;
-    isbn_10?: string;
-    isbn_13?: string;
-    openlibrary_edition_id?: string;
-    work_id?: string;
-    publish_country?: string;
-    publish_places?: string[];
-    identifiers?: Record<string, any>;
-    series?: string[];
-    contributors?: { role: string; name: string }[];
-    translated_from?: string[];
-    weight?: string;
-    physical_format?: string;
-    dimensions?: string;
-    artist?: string;
-    tracks?: string[];
-    duration?: number;
+    subtitle?: string | null;
+    language?: string | null;
+    publisher?: string[] | undefined;
+    director?: string | null;
+    actors?: string[] | undefined;
+    platforms?: string[] | undefined;
+    developers?: string[] | undefined;
+    authors?: string[] | undefined;
+    page_count?: number | null;
+    pagination?: string | null;
+    isbn?: string | null;
+    isbn_10?: string | null;
+    isbn_13?: string | null;
+    openlibrary_edition_id?: string | null;
+    work_id?: string | null;
+    publish_country?: string | null;
+    publish_places?: string[] | undefined;
+    identifiers?: Record<string, any> | undefined;
+    series?: string[] | undefined;
+    contributors?: { role: string; name: string }[] | undefined;
+    translated_from?: string[] | undefined;
+    weight?: string | null;
+    physical_format?: string | null;
+    dimensions?: string | null;
+    artist?: string | null;
+    tracks?: string[] | undefined;
+    duration?: number | null;
   };
 
-  @Prop({ default: 0 })
+  @Prop({ type: Number, default: 0 })
   likes_count: number;
 
-  @Prop({ default: 0 })
+  @Prop({ type: Number, default: 0 })
   average_rating: number;
 
-  @Prop({ default: 0 })
+  @Prop({ type: Number, default: 0 })
   reviews_count: number;
 
-  @Prop({ default: 0 })
+  @Prop({ type: Number, default: 0 })
   comments_count: number;
 
-  @Prop()
-  image_url: string;
+  @Prop({ type: String, default: null })
+  image_url: string | null;
 }
 
 export const ContentSchema = SchemaFactory.createForClass(Content);
 
-// 🔹 Évite les doublons : même type, même titre, même date
-ContentSchema.index({ type: 1, title: 1, release_date: 1 }, { unique: true });
+// 🔹 Unique index for movies: type, title, release_date
+ContentSchema.index(
+  { type: 1, title: 1, release_date: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { type: 'movie' }
+  }
+);
+
+// 🔹 Unique index for books: type, title, release_date, metadata.subtitle
+ContentSchema.index(
+  { type: 1, title: 1, release_date: 1, 'metadata.subtitle': 1 },
+  {
+    unique: true,
+    partialFilterExpression: { type: 'book' }
+  }
+);
 
 // 🔹 Index pour optimiser la recherche par date de sortie et le tri par note moyenne
 ContentSchema.index({ release_date: 1, average_rating: -1 });
