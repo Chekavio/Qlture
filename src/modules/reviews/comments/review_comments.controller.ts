@@ -11,7 +11,7 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { ReviewCommentsService } from './review_comments.service';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/user.decorator';
 import {
   ApiTags,
@@ -26,7 +26,7 @@ import { CommentDto } from './dto/comment.dto';
 
 @ApiTags('Review Comments')
 @ApiBearerAuth('JWT-auth')
-@UseGuards(JwtAuthGuard)
+@UseGuards(OptionalJwtAuthGuard)
 @Controller('reviews')
 export class ReviewCommentsController {
   constructor(private readonly reviewCommentsService: ReviewCommentsService) {}
@@ -50,36 +50,68 @@ export class ReviewCommentsController {
   }
 
   @Get(':id/comments')
-@ApiOperation({ summary: 'Lister les commentaires d’une review (paginé, trié)' })
-@ApiParam({ name: 'id', description: 'ID de la review', type: 'string' })
-@ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-@ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
-@ApiQuery({
-  name: 'sort',
-  required: false,
-  enum: ['date_desc', 'date_asc', 'likes_desc'],
-  example: 'date_desc',
-})
-@ApiResponse({ status: 200, description: 'Liste paginée des commentaires' })
-async getComments(
-  @Param('id') reviewId: string,
-  @Query('page') page = 1,
-  @Query('limit') limit = 10,
-  @Query('sort') sort: 'date_desc' | 'date_asc' | 'likes_desc' = 'date_desc',
-  @CurrentUser('sub') userId?: string,
-) {
-  const pageNum = Number(page);
-  const limitNum = Number(limit);
+  @ApiOperation({ summary: 'Lister les commentaires racines d’une review (paginé, trié), avec N replies' })
+  @ApiParam({ name: 'id', description: 'ID de la review', type: 'string' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiQuery({ name: 'repliesLimit', required: false, type: Number, example: 2 })
+  @ApiQuery({
+    name: 'sort',
+    required: false,
+    enum: ['date_desc', 'date_asc', 'likes_desc'],
+    example: 'date_desc',
+  })
+  @ApiResponse({ status: 200, description: 'Liste paginée des commentaires racines avec replies' })
+  async getRootComments(
+    @Param('id') reviewId: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+    @Query('repliesLimit') repliesLimit = 2,
+    @Query('sort') sort: 'date_desc' | 'date_asc' | 'likes_desc' = 'date_desc',
+    @CurrentUser('sub') userId?: string,
+  ) {
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const repliesLimitNum = Number(repliesLimit);
+    return this.reviewCommentsService.getRootCommentsForReview(
+      reviewId,
+      userId,
+      isNaN(pageNum) ? 1 : pageNum,
+      isNaN(limitNum) ? 10 : limitNum,
+      isNaN(repliesLimitNum) ? 2 : repliesLimitNum,
+      sort,
+    );
+  }
 
-  return this.reviewCommentsService.getCommentsForReview(
-    reviewId,
-    userId,
-    isNaN(pageNum) ? 1 : pageNum,
-    isNaN(limitNum) ? 10 : limitNum,
-    sort,
-  );
-}
-
+  @Get('comments/:id/replies')
+  @ApiOperation({ summary: 'Lister les replies d’un commentaire (paginé, trié)' })
+  @ApiParam({ name: 'id', description: 'ID du commentaire parent', type: 'string' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 5 })
+  @ApiQuery({
+    name: 'sort',
+    required: false,
+    enum: ['date_desc', 'date_asc', 'likes_desc'],
+    example: 'date_desc',
+  })
+  @ApiResponse({ status: 200, description: 'Liste paginée des replies' })
+  async getReplies(
+    @Param('id') commentId: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 5,
+    @Query('sort') sort: 'date_desc' | 'date_asc' | 'likes_desc' = 'date_desc',
+    @CurrentUser('sub') userId?: string,
+  ) {
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    return this.reviewCommentsService.getRepliesForComment(
+      commentId,
+      userId,
+      isNaN(pageNum) ? 1 : pageNum,
+      isNaN(limitNum) ? 5 : limitNum,
+      sort,
+    );
+  }
 
   @Delete('comments/:commentId')
   @HttpCode(HttpStatus.NO_CONTENT)

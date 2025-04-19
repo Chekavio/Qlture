@@ -344,6 +344,19 @@ export class ContentsController {
     return this.contentsService.patchContent(id, body);
   }
 
+  @Post(':contentId/like')
+  @ApiBearerAuth('JWT-auth')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Toggle like/dislike sur un contenu (auth requis)' })
+  @ApiParam({ name: 'contentId', type: 'string', description: 'ID du contenu à liker/disliker' })
+  @ApiResponse({ status: 200, description: 'Retourne { liked: true } si like, { liked: false } si dislike', schema: { example: { liked: true } } })
+  async toggleLikeContent(
+    @Param('contentId') contentId: string,
+    @CurrentUser('sub') userId: string,
+  ) {
+    return this.contentsService.toggleLikeContent(contentId, userId);
+  }
+
   @UseGuards(OptionalJwtAuthGuard) // Déplacé avant @Public pour s'assurer qu'il est appliqué en premier
   @Public() 
   @Get(':id/reviews')

@@ -18,6 +18,9 @@ export class ReviewComment extends Document {
   @Prop({ default: 0 })
   likesCount: number;
 
+  @Prop({ default: 0 })
+  repliesCount: number;
+
   @Prop() createdAt: Date; // ✅ utile si tu veux les typings corrects
   @Prop() updatedAt: Date;
 }

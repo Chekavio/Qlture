@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ContentsRepository } from './contents.repository';
 import { CreateContentDto } from './dto';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { ContentLike } from './content_likes.schema';
 
 // Utility function to ensure all fields are present for book content
 function completeBookDto(dto: Partial<CreateContentDto>): any {
@@ -43,7 +46,10 @@ function completeBookDto(dto: Partial<CreateContentDto>): any {
 
 @Injectable()
 export class ContentsService {
-  constructor(private readonly contentsRepository: ContentsRepository) {}
+  constructor(
+    private readonly contentsRepository: ContentsRepository,
+    @InjectModel(ContentLike.name) private readonly contentLikeModel: Model<ContentLike>,
+  ) {}
 
   async createContent(dto: CreateContentDto) {
     if (dto.metadata && dto.metadata.director === null) {
@@ -70,6 +76,7 @@ export class ContentsService {
       average_rating: content.average_rating || 0,
       reviews_count: content.reviews_count || 0,
       comments_count: content.comments_count || 0,
+      likes_count: content.likes_count || 0,
     };
   }
 
@@ -182,5 +189,29 @@ export class ContentsService {
   async patchContent(id: string, patch: Record<string, any>) {
     // On ne modifie que les champs fournis dans le body
     return this.contentsRepository.findOneAndUpdate({ _id: id }, patch, { new: true });
+  }
+
+  // Toggle like/dislike pour un contenu
+  async toggleLikeContent(contentId: string, userId: string) {
+    const existing = await this.contentLikeModel.findOne({ contentId, userId });
+    if (existing) {
+      await this.contentLikeModel.deleteOne({ _id: existing._id });
+      // Optionnel: décrémenter likes_count sur le contenu
+      await this.contentsRepository.findOneAndUpdate(
+        { _id: contentId },
+        { $inc: { likes_count: -1 } },
+        { new: true }
+      );
+      return { liked: false };
+    } else {
+      await this.contentLikeModel.create({ contentId, userId });
+      // Optionnel: incrémenter likes_count sur le contenu
+      await this.contentsRepository.findOneAndUpdate(
+        { _id: contentId },
+        { $inc: { likes_count: 1 } },
+        { new: true }
+      );
+      return { liked: true };
+    }
   }
 }
