@@ -44,11 +44,14 @@ export class ReviewsService {
     const content = await this.contentModel.findById(contentId);
     if (!content) throw new NotFoundException('Contenu introuvable');
 
+    const type = content.type || null;
+
     const review = await this.reviewModel.create({
       userId,
       contentId,
       ...(rating !== undefined ? { rating } : {}),
       reviewText,
+      type,
       likesCount: 0,
       commentsCount: 0,
     });
@@ -70,10 +73,13 @@ export class ReviewsService {
     const content = await this.contentModel.findById(contentId);
     if (!content) throw new NotFoundException('Contenu introuvable');
 
+    const type = content.type || null;
+
     const review = await this.reviewModel.create({
       userId,
       contentId,
       rating,
+      type,
       likesCount: 0,
       commentsCount: 0,
     });
@@ -436,6 +442,6 @@ export class ReviewsService {
     };
     const sortField = sortFields[sort] || 'updatedAt';
     const sortOrder = order === 'asc' ? 1 : -1;
-    return this.reviewModel.find({ userId }).sort({ [sortField]: sortOrder }).lean();
+    return this.reviewModel.find({ userId, reviewText: { $exists: true, $ne: '' } }).sort({ [sortField]: sortOrder }).lean();
   }
 }

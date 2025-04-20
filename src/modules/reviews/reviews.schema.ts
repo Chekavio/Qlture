@@ -9,6 +9,9 @@ export class Review extends Document {
   @Prop({ required: true })
   contentId: string;
 
+  @Prop({ type: String, enum: ['movie', 'book', 'game', 'album'], default: null })
+  type: string | null;
+
   @Prop({ required: false, min: 0.5, max: 5 })
   rating?: number;
 
