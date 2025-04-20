@@ -12,26 +12,28 @@ import {
 } from '@nestjs/common';
 import { ReviewCommentsService } from './review_comments.service';
 import { OptionalJwtAuthGuard } from '../../auth/guards/optional-jwt-auth.guard';
+import { AuthGuard } from '@nestjs/passport';
 import { CurrentUser } from '../../../common/decorators/user.decorator';
 import {
   ApiTags,
-  ApiBearerAuth,
   ApiOperation,
   ApiParam,
   ApiQuery,
   ApiResponse,
   ApiBody,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { CommentDto } from './dto/comment.dto';
+import { Public } from '../../../common/decorators/public.decorator';
 
 @ApiTags('Review Comments')
-@ApiBearerAuth('JWT-auth')
-@UseGuards(OptionalJwtAuthGuard)
+// @ApiBearerAuth('JWT-auth') // Retirer ce décorateur de classe, il force l'auth sur toutes les routes
 @Controller('reviews')
 export class ReviewCommentsController {
   constructor(private readonly reviewCommentsService: ReviewCommentsService) {}
 
-  @Post(':id/comments')
+  @UseGuards(AuthGuard('jwt'))
+  @Post(':id/comments/add')
   @ApiOperation({ summary: 'Poster un commentaire ou une réponse sous une review' })
   @ApiParam({ name: 'id', description: 'ID de la review', type: 'string' })
   @ApiBody({ type: CommentDto })
@@ -49,19 +51,17 @@ export class ReviewCommentsController {
     );
   }
 
-  @Get(':id/comments')
-  @ApiOperation({ summary: 'Lister les commentaires racines d’une review (paginé, trié), avec N replies' })
+  @Public()
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Get(':id/comments/racines')
+  @ApiOperation({ summary: 'Commentaires racines d\'une review (threaded, paginé, public ou connecté)' })
   @ApiParam({ name: 'id', description: 'ID de la review', type: 'string' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
-  @ApiQuery({ name: 'repliesLimit', required: false, type: Number, example: 2 })
-  @ApiQuery({
-    name: 'sort',
-    required: false,
-    enum: ['date_desc', 'date_asc', 'likes_desc'],
-    example: 'date_desc',
-  })
-  @ApiResponse({ status: 200, description: 'Liste paginée des commentaires racines avec replies' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'repliesLimit', required: false, type: Number })
+  @ApiQuery({ name: 'sort', required: false, enum: ['date_desc', 'date_asc', 'likes_desc'] })
+  @ApiResponse({ status: 200, description: 'Commentaires racines récupérés' })
   async getRootComments(
     @Param('id') reviewId: string,
     @Query('page') page = 1,
@@ -70,6 +70,7 @@ export class ReviewCommentsController {
     @Query('sort') sort: 'date_desc' | 'date_asc' | 'likes_desc' = 'date_desc',
     @CurrentUser('sub') userId?: string,
   ) {
+    console.log('Entrée dans le contrôleur getRootComments', reviewId, typeof reviewId);
     const pageNum = Number(page);
     const limitNum = Number(limit);
     const repliesLimitNum = Number(repliesLimit);
@@ -83,6 +84,9 @@ export class ReviewCommentsController {
     );
   }
 
+  @Public()
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Get('comments/:id/replies')
   @ApiOperation({ summary: 'Lister les replies d’un commentaire (paginé, trié)' })
   @ApiParam({ name: 'id', description: 'ID du commentaire parent', type: 'string' })
@@ -113,6 +117,7 @@ export class ReviewCommentsController {
     );
   }
 
+  @UseGuards(AuthGuard('jwt'))
   @Delete('comments/:commentId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Supprimer un commentaire (seulement si auteur)' })

@@ -26,7 +26,7 @@ export class ReviewCommentsService {
   ) {}
 
   async create(reviewId: string, userId: string, comment: string, parentCommentId?: string) {
-    const review = await this.reviewModel.findById(reviewId);
+    const review = await this.reviewModel.findById(String(reviewId));
     if (!review) throw new NotFoundException('Review not found');
 
     let finalComment = comment;
@@ -45,7 +45,7 @@ export class ReviewCommentsService {
     }
 
     const created = await this.commentModel.create({
-      reviewId,
+      reviewId: String(reviewId),
       userId,
       comment: finalComment,
       parentCommentId: parentCommentId ?? null,
@@ -53,7 +53,7 @@ export class ReviewCommentsService {
       repliesCount: 0,
     });
     // MAJ compteur de commentaires sur la review
-    await this.reviewsService.updateReviewCommentsCount(reviewId);
+    await this.reviewsService.updateReviewCommentsCount(String(reviewId));
     // MAJ compteur de replies sur le parent (si reply)
     if (parentCommentId) {
       await this.commentModel.updateOne(
@@ -72,7 +72,7 @@ export class ReviewCommentsService {
     await this.commentModel.deleteOne({ _id: commentId });
     await this.likeModel.deleteMany({ commentId });
     // MAJ compteur de commentaires sur la review
-    await this.reviewsService.updateReviewCommentsCount(reviewId);
+    await this.reviewsService.updateReviewCommentsCount(String(reviewId));
     // MAJ compteur de replies sur le parent (si reply)
     if (comment.parentCommentId) {
       await this.commentModel.updateOne(
@@ -98,12 +98,12 @@ export class ReviewCommentsService {
 
     const [rawComments, total] = await Promise.all([
       this.commentModel
-        .find({ reviewId })
+        .find({ reviewId: String(reviewId) })
         .sort(sortOrder)
         .skip(skip)
         .limit(limit)
         .lean(),
-      this.commentModel.countDocuments({ reviewId }),
+      this.commentModel.countDocuments({ reviewId: String(reviewId) }),
     ]);
 
     const userIds = [...new Set(rawComments.map((r) => r.userId))] as string[];
@@ -178,10 +178,10 @@ export class ReviewCommentsService {
     // Récupère TOUS les commentaires pour la review (plus seulement les racines)
     const [rawComments, total] = await Promise.all([
       this.commentModel
-        .find({ reviewId })
+        .find({ reviewId: String(reviewId) })
         .sort(sortMap[sort])
         .lean(),
-      this.commentModel.countDocuments({ reviewId }),
+      this.commentModel.countDocuments({ reviewId: String(reviewId) }),
     ]);
 
     const userIds = [...new Set(rawComments.map((c) => c.userId))] as string[];
@@ -311,15 +311,20 @@ export class ReviewCommentsService {
       likes_desc: { likesCount: -1, createdAt: 1 },
     };
 
+    // DEBUG LOGS pour analyse
+    console.log('reviewId reçu:', reviewId, 'type:', typeof reviewId);
+    const debugRoots = await this.commentModel.find({ reviewId: String(reviewId), parentCommentId: null }).lean();
+    console.log('Commentaires racines trouvés:', debugRoots.length, debugRoots.map(c => ({ _id: c._id, reviewId: c.reviewId, parentCommentId: c.parentCommentId })));
+
     // 1. On récupère les commentaires racines paginés
     const [roots, total] = await Promise.all([
       this.commentModel
-        .find({ reviewId, parentCommentId: null })
+        .find({ reviewId: String(reviewId), parentCommentId: null })
         .sort(sortMap[sort])
         .skip(skip)
         .limit(limit)
         .lean(),
-      this.commentModel.countDocuments({ reviewId, parentCommentId: null }),
+      this.commentModel.countDocuments({ reviewId: String(reviewId), parentCommentId: null }),
     ]);
     const rootIds = roots.map((c) => String(c._id));
     const userIds = [...new Set(roots.map((c) => c.userId))] as string[];

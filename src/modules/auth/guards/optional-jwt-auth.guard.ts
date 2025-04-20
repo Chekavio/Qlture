@@ -16,6 +16,7 @@ export class OptionalJwtAuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    console.log('OptionalJwtAuthGuard called');
     console.log('[DEBUG] OptionalJwtAuthGuard.canActivate called');
     
     const request = context.switchToHttp().getRequest<Request>();

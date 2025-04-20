@@ -255,6 +255,7 @@ export class ContentsController {
   }
 
   @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Get()
   @ApiOperation({ summary: 'Récupérer tous les contenus avec pagination' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -265,6 +266,7 @@ export class ContentsController {
   }
 
   @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('monthly-releases')
   @ApiOperation({ summary: 'Get current month releases ranked by rating' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -306,6 +308,7 @@ export class ContentsController {
   }
 
   @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('decade/:decade')
   @ApiOperation({ summary: 'Get content from a specific decade' })
   @ApiParam({ 
@@ -365,8 +368,8 @@ export class ContentsController {
     return this.contentsService.toggleLikeContent(contentId, userId);
   }
 
-  @UseGuards(OptionalJwtAuthGuard) // Déplacé avant @Public pour s'assurer qu'il est appliqué en premier
-  @Public() 
+  @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':id/reviews')
   @ApiOperation({
     summary: 'Obtenir review utilisateur et reviews avec commentaires pour un contenu',
