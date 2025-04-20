@@ -21,7 +21,7 @@ const limit = pLimit(CONCURRENCY);
 const authorCache = new Map<string, string>();
 
 const popularSubjects = [
-  'philosophy', 'biography',
+  
   'poetry', 'drama', 'psychology'
 ];
 

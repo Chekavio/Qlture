@@ -6,7 +6,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { FollowersModule } from './modules/followers/followers.module';
 import { AppController } from './app.controller';
 import { ContentsModule } from './modules/contents/contents.module';
-import { ReviewsModule } from './modules/reviews/reviews.module'; // 👈 ajouter cette ligne
+import { ReviewsModule } from './modules/reviews/reviews.module'; 
+import { WishlistModule } from './modules/wishlist/wishlist.module';
 import configuration from './config/configuration';
 import { MongooseModule } from '@nestjs/mongoose';
 import { SearchModule } from './modules/search/search.module';
@@ -30,7 +31,8 @@ import { SearchModule } from './modules/search/search.module';
     FollowersModule,
     ContentsModule,
     ReviewsModule,
-    SearchModule, // 👈 ajoute le module ici
+    WishlistModule,
+    SearchModule, 
   ],
   controllers: [AppController],
 })
