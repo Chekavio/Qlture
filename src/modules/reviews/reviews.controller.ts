@@ -16,6 +16,7 @@ import { ReviewsService } from './reviews.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 import {
   ApiTags,
@@ -31,6 +32,7 @@ import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('reviews')
 @UseGuards(JwtAuthGuard)
+@ApiBearerAuth('JWT-auth')
 @Controller('reviews')
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
@@ -101,7 +103,8 @@ export class ReviewsController {
 
   // --- ROUTE PUBLIQUE : doit être placée AVANT les routes dynamiques ---
   @Get('by-id/:reviewId')
-  @ApiOperation({ summary: 'Obtenir une review par son ID (toutes les infos, public)' })
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Obtenir une review par son ID (toutes les infos, public, enrichi user + like)' })
   @ApiParam({ name: 'reviewId', type: 'string', description: 'ID de la review' })
   @ApiResponse({ status: 200, description: 'Détails complets de la review', schema: { example: {
     _id: 'abc123',
@@ -114,13 +117,32 @@ export class ReviewsController {
     createdAt: '2025-01-01T12:00:00Z',
     updatedAt: '2025-01-01T12:00:00Z',
     type: 'movie',
+    user: { id: 'user456', username: 'john', avatar: 'https://...' },
+    isLiked: false
   } } })
   @Public()
-  async getReviewById(@Param('reviewId') reviewId: string) {
-    console.log('>>> [DEBUG] Endpoint GET /reviews/by-id/:reviewId called with reviewId =', reviewId);
+  async getReviewById(
+    @Param('reviewId') reviewId: string,
+    @CurrentUser('sub') userId?: string
+  ) {
+    // Récupérer la review
     const review = await this.reviewsService['reviewModel'].findById(reviewId).lean();
     if (!review) throw new NotFoundException('Review introuvable');
-    return review;
+    // Récupérer l'utilisateur auteur
+    const user = await this.reviewsService['prisma'].user.findUnique({
+      where: { id: review.userId },
+      select: { id: true, username: true, avatar: true },
+    });
+    // Vérifier si l'utilisateur connecté a liké la review
+    let isLiked = false;
+    if (userId) {
+      isLiked = !!(await this.reviewsService['reviewLikeModel'].findOne({ reviewId: review._id, userId }));
+    }
+    return {
+      ...review,
+      user: user || { id: review.userId, username: 'Utilisateur inconnu', avatar: null },
+      isLiked,
+    };
   }
 
   // --- ROUTES DYNAMIQUES (doivent venir APRÈS la route publique) ---
