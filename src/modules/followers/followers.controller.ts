@@ -7,9 +7,10 @@ import {
   UseGuards,
   HttpStatus,
   ParseUUIDPipe,
+  Query,
 } from '@nestjs/common';
 import { FollowersService } from './followers.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
@@ -64,23 +65,37 @@ export class FollowersController {
   }
 
   @Get('followers')
-  @ApiOperation({ summary: 'Obtenir la liste des followers' })
+  @ApiOperation({ summary: 'Obtenir la liste des followers (du user connecté ou d\'un user donné)' })
+  @ApiQuery({
+    name: 'userId',
+    description: "ID de l'utilisateur (optionnel, si non fourni = user connecté)",
+    type: 'string',
+    format: 'uuid',
+    required: false,
+  })
   @ApiResponse({ 
     status: HttpStatus.OK, 
     description: 'Liste des followers récupérée avec succès'
   })
-  async getFollowers(@CurrentUser() user: any) {
-    return this.followersService.getFollowers(user);
+  async getFollowers(@CurrentUser() user: any, @Query('userId') userId?: string) {
+    return this.followersService.getFollowers(userId || user);
   }
 
   @Get('following')
-  @ApiOperation({ summary: 'Obtenir la liste des utilisateurs suivis' })
+  @ApiOperation({ summary: 'Obtenir la liste des utilisateurs suivis (du user connecté ou d\'un user donné)' })
+  @ApiQuery({
+    name: 'userId',
+    description: "ID de l'utilisateur (optionnel, si non fourni = user connecté)",
+    type: 'string',
+    format: 'uuid',
+    required: false,
+  })
   @ApiResponse({ 
     status: HttpStatus.OK, 
     description: 'Liste des utilisateurs suivis récupérée avec succès'
   })
-  async getFollowing(@CurrentUser() user: any) {
-    return this.followersService.getFollowing(user);
+  async getFollowing(@CurrentUser() user: any, @Query('userId') userId?: string) {
+    return this.followersService.getFollowing(userId || user);
   }
 
   @Get(':userId/followers/count')
