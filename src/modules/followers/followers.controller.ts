@@ -12,6 +12,7 @@ import {
 import { FollowersService } from './followers.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 
@@ -65,6 +66,7 @@ export class FollowersController {
   }
 
   @Get('followers')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Obtenir la liste des followers (du user connecté ou d\'un user donné)' })
   @ApiQuery({
     name: 'userId',
@@ -77,11 +79,13 @@ export class FollowersController {
     status: HttpStatus.OK, 
     description: 'Liste des followers récupérée avec succès'
   })
+  @Public()
   async getFollowers(@CurrentUser() user: any, @Query('userId') userId?: string) {
     return this.followersService.getFollowers(userId || user);
   }
 
   @Get('following')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Obtenir la liste des utilisateurs suivis (du user connecté ou d\'un user donné)' })
   @ApiQuery({
     name: 'userId',
@@ -94,6 +98,7 @@ export class FollowersController {
     status: HttpStatus.OK, 
     description: 'Liste des utilisateurs suivis récupérée avec succès'
   })
+  @Public()
   async getFollowing(@CurrentUser() user: any, @Query('userId') userId?: string) {
     return this.followersService.getFollowing(userId || user);
   }
