@@ -26,7 +26,8 @@ import {
     ApiBody,
     ApiQuery,
   } from '@nestjs/swagger';
-  
+  import { NotFoundException } from '@nestjs/common';
+  import { Public } from '../../common/decorators/public.decorator';
   @ApiTags('reviews')
   @ApiBearerAuth('JWT-auth')
   @UseGuards(JwtAuthGuard)
@@ -142,5 +143,27 @@ import {
       @Query('order') order?: 'asc' | 'desc',
     ) {
       return this.reviewsService.getAllReviewsForUser(userId, sort, order);
+    }
+
+    @Public()
+    @Get('by-id/:reviewId')
+    @ApiOperation({ summary: 'Obtenir une review par son ID (toutes les infos, public)' })
+    @ApiParam({ name: 'reviewId', type: 'string', description: 'ID de la review' })
+    @ApiResponse({ status: 200, description: 'Détails complets de la review', schema: { example: {
+      _id: 'abc123',
+      userId: 'user456',
+      contentId: 'content789',
+      reviewText: 'Super film !',
+      rating: 4.5,
+      likesCount: 2,
+      commentsCount: 3,
+      createdAt: '2025-01-01T12:00:00Z',
+      updatedAt: '2025-01-01T12:00:00Z',
+      type: 'movie',
+    } } })
+    async getReviewById(@Param('reviewId') reviewId: string) {
+      const review = await this.reviewsService['reviewModel'].findById(reviewId).lean();
+      if (!review) throw new NotFoundException('Review introuvable');
+      return review;
     }
   }

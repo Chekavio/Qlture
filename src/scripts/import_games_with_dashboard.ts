@@ -1,13 +1,16 @@
 import axios from 'axios';
 import mongoose from 'mongoose';
-import { ContentSchema } from '../modules/contents/contents.schema';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import pLimit from 'p-limit';
 import * as fs from 'fs';
 import ora from 'ora';
 import chalk from 'chalk';
+import crypto from 'crypto';
 const cliProgress = require('cli-progress');
+
+// 👉 IMPORT DE TON VRAI SCHÉMA
+import { ContentSchema } from '../modules/contents/contents.schema';
 
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
@@ -25,15 +28,13 @@ const TOTAL_GAMES = isTestMode ? 500 : 100000;
 const BATCH_SIZE = 500;
 
 const collectionArg = process.argv.find(arg => arg.startsWith('--collection='));
-const collectionName = collectionArg ? collectionArg.split('=')[1] : 'contents_test';
+const collectionName = collectionArg ? collectionArg.split('=')[1] : 'games_import_test';
 
 let totalInserted = 0;
 let totalErrors = 0;
 
-function getCollectionModel(name: string) {
-  return mongoose.model(name, ContentSchema, name);
-}
-const ContentModel = getCollectionModel(collectionName);
+// ✅ UTILISATION DU VRAI SCHÉMA MAIS FORÇAGE DE COLLECTION
+const ContentModel = mongoose.model(collectionName, ContentSchema, collectionName);
 
 async function connectMongo() {
   await mongoose.connect(MONGO_URI, {
@@ -77,8 +78,8 @@ async function refreshAccessToken() {
 
 async function fetchGames(offset: number, limit: number = 500) {
   try {
-    const res = await axios.post(`${IGDB_API_URL}/games`, 
-      `fields id, name, first_release_date; sort popularity desc; limit ${limit}; offset ${offset};`,
+    const res = await axios.post(`${IGDB_API_URL}/games`,
+      `fields id,name,first_release_date; sort popularity desc; limit ${limit}; offset ${offset}`,
       {
         headers: {
           'Client-ID': IGDB_CLIENT_ID,
@@ -113,6 +114,7 @@ function saveOffset(offset: number) {
 }
 
 function buildGameDoc(game: any) {
+  const igdb_id = game.id ? String(game.id) : crypto.randomUUID();
   return {
     title: game.name,
     title_vo: game.name,
@@ -123,7 +125,7 @@ function buildGameDoc(game: any) {
     genres: [],
     image_url: "",
     metadata: {
-      igdb_id: String(game.id),
+      igdb_id,
       release_type: "full"
     }
   };
@@ -148,10 +150,17 @@ async function importGames() {
 
   for (; offset < TOTAL_GAMES; offset += BATCH_SIZE) {
     const games = await fetchGames(offset, BATCH_SIZE);
-    if (!games.length) break;
+    if (!games.length) {
+      console.log("⚠️ Aucun jeu reçu, fin de boucle.");
+      break;
+    }
+
+    console.log("📦 Fetched", games.length, "jeux | Exemple :", games[0]);
 
     const tasks = games.map(game => limit(async () => {
       const doc = buildGameDoc(game);
+      console.log("🔍 Insertion:", doc.title, "| IGDB ID:", doc.metadata.igdb_id);
+
       try {
         await ContentModel.findOneAndUpdate(
           { type: 'game', 'metadata.igdb_id': doc.metadata.igdb_id },
@@ -159,8 +168,9 @@ async function importGames() {
           { upsert: true, new: true }
         );
         totalInserted++;
-      } catch {
+      } catch (err) {
         totalErrors++;
+        console.error("❌ Erreur insertion :", err.message);
       }
     }));
 
