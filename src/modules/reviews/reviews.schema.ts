@@ -22,7 +22,7 @@ export class Review extends Document {
   likesCount: number;
 
   @Prop({ default: 0 })
-  commentsCount: number;
+  commentsCount: number; // nombre de reviews_comments associés (réponses)
 
   // ✅ Déclaration explicite des timestamps
   createdAt: Date;

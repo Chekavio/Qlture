@@ -8,6 +8,7 @@ import { AppController } from './app.controller';
 import { ContentsModule } from './modules/contents/contents.module';
 import { ReviewsModule } from './modules/reviews/reviews.module'; 
 import { WishlistModule } from './modules/wishlist/wishlist.module';
+import { HistoryModule } from './modules/history/history.module';
 import configuration from './config/configuration';
 import { MongooseModule } from '@nestjs/mongoose';
 import { SearchModule } from './modules/search/search.module';
@@ -32,6 +33,7 @@ import { SearchModule } from './modules/search/search.module';
     ContentsModule,
     ReviewsModule,
     WishlistModule,
+    HistoryModule,
     SearchModule, 
   ],
   controllers: [AppController],

@@ -24,13 +24,20 @@ export class ReviewLikesService {
 
     if (existing) {
       await this.likeModel.deleteOne({ _id: existing._id });
-      await this.reviewsService.updateReviewLikesCount(reviewId);
+      // Atomique: décrémente le compteur
+      await this.reviewModel.updateOne(
+        { _id: reviewId },
+        { $inc: { likesCount: -1 } }
+      );
       return { liked: false };
     }
 
     await this.likeModel.create({ reviewId, userId });
-    await this.reviewsService.updateReviewLikesCount(reviewId);
-
+    // Atomique: incrémente le compteur
+    await this.reviewModel.updateOne(
+      { _id: reviewId },
+      { $inc: { likesCount: 1 } }
+    );
     return { liked: true };
   }
 

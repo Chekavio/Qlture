@@ -27,12 +27,12 @@ import { CommentDto } from './dto/comment.dto';
 import { Public } from '../../../common/decorators/public.decorator';
 
 @ApiTags('Review Comments')
-// @ApiBearerAuth('JWT-auth') // Retirer ce décorateur de classe, il force l'auth sur toutes les routes
 @Controller('reviews')
 export class ReviewCommentsController {
   constructor(private readonly reviewCommentsService: ReviewCommentsService) {}
 
   @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth('JWT-auth')
   @Post(':id/comments/add')
   @ApiOperation({ summary: 'Poster un commentaire ou une réponse sous une review' })
   @ApiParam({ name: 'id', description: 'ID de la review', type: 'string' })
@@ -47,39 +47,32 @@ export class ReviewCommentsController {
       reviewId,
       userId,
       dto.comment,
-      dto.parentCommentId,
+      dto.replyToCommentId,
     );
   }
 
   @Public()
   @UseGuards(OptionalJwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @Get(':id/comments/racines')
-  @ApiOperation({ summary: 'Commentaires racines d\'une review (threaded, paginé, public ou connecté)' })
+  @Get(':id/comments')
+  @ApiOperation({ summary: 'Obtenir tous les commentaires d\'une review (flat, paginé)' })
   @ApiParam({ name: 'id', description: 'ID de la review', type: 'string' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiQuery({ name: 'repliesLimit', required: false, type: Number })
   @ApiQuery({ name: 'sort', required: false, enum: ['date_desc', 'date_asc', 'likes_desc'] })
-  @ApiResponse({ status: 200, description: 'Commentaires racines récupérés' })
-  async getRootComments(
+  @ApiResponse({ status: 200, description: 'Commentaires récupérés' })
+  async getAllCommentsForReview(
     @Param('id') reviewId: string,
     @Query('page') page = 1,
     @Query('limit') limit = 10,
-    @Query('repliesLimit') repliesLimit = 2,
     @Query('sort') sort: 'date_desc' | 'date_asc' | 'likes_desc' = 'date_desc',
     @CurrentUser('sub') userId?: string,
   ) {
-    console.log('Entrée dans le contrôleur getRootComments', reviewId, typeof reviewId);
-    const pageNum = Number(page);
-    const limitNum = Number(limit);
-    const repliesLimitNum = Number(repliesLimit);
-    return this.reviewCommentsService.getRootCommentsForReview(
+    return this.reviewCommentsService.getAllCommentsForReview(
       reviewId,
       userId,
-      isNaN(pageNum) ? 1 : pageNum,
-      isNaN(limitNum) ? 10 : limitNum,
-      isNaN(repliesLimitNum) ? 2 : repliesLimitNum,
+      Number(page),
+      Number(limit),
       sort,
     );
   }
@@ -118,14 +111,16 @@ export class ReviewCommentsController {
   }
 
   @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth('JWT-auth')
   @Delete('comments/:commentId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Supprimer un commentaire (seulement si auteur)' })
-  @ApiParam({ name: 'commentId', type: 'string' })
+  @ApiParam({ name: 'commentId', description: 'ID du commentaire', type: 'string' })
+  @ApiResponse({ status: 204, description: 'Commentaire supprimé' })
   async deleteComment(
     @Param('commentId') commentId: string,
     @CurrentUser('sub') userId: string,
   ) {
-    await this.reviewCommentsService.delete(commentId, userId);
+    return this.reviewCommentsService.delete(commentId, userId);
   }
 }

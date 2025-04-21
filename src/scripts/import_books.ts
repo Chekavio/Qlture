@@ -22,7 +22,7 @@ const authorCache = new Map<string, string>();
 
 const popularSubjects = [
   
-  'poetry', 'drama', 'psychology'
+  'psychology'
 ];
 
 if (!fs.existsSync(PROGRESS_DIR)) fs.mkdirSync(PROGRESS_DIR);

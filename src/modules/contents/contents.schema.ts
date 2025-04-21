@@ -67,6 +67,12 @@ export class Content extends Document {
   @Prop({ type: Number, default: 0 })
   comments_count: number;
 
+  @Prop({ type: Number, default: 0 })
+  wishlist_count: number;
+
+  @Prop({ type: Number, default: 0 })
+  history_count: number;
+
   @Prop({ type: String, default: null })
   image_url: string | null;
 }

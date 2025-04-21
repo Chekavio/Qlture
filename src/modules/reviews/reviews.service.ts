@@ -105,7 +105,7 @@ export class ReviewsService {
     if (!review) throw new NotFoundException('Review not found');
 
     await this.reviewModel.deleteOne({ _id: review._id });
-    await this.cleanupService.cleanupReviewData(String(review._id));
+    await this.cleanupService.cleanupReviewData(String(review._id), contentId);
     await this.updateContentStats(contentId);
   }
 
@@ -314,7 +314,7 @@ export class ReviewsService {
     // 🔎 Reviews (avec texte) sauf celle du user connecté
     const query: any = {
       contentId,
-      reviewText: { $exists: true, $ne: '' },
+      reviewText: { $nin: ['', null] },
       ...(userReviewId ? { _id: { $ne: userReviewId } } : {}),
     };
 
@@ -412,6 +412,8 @@ export class ReviewsService {
     };
   }
 
+  // Les méthodes updateReviewLikesCount et updateCommentLikesCount ne sont plus nécessaires pour le toggle atomique
+  // Elles peuvent rester pour les scripts de resync, mais ne sont plus appelées dans le toggleLike
   async updateReviewLikesCount(reviewId: string): Promise<void> {
     // Ultra performant: compte les likes sur la review
     const likesCount = await this.reviewLikeModel.countDocuments({ reviewId });

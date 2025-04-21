@@ -11,6 +11,7 @@ import { ReviewCommentLike } from './likes/review_comment_likes.schema';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { Review } from '../reviews.schema';
 import { ReviewsService } from '../reviews.service';
+import { Content } from '../../contents/contents.schema';
 
 @Injectable()
 export class ReviewCommentsService {
@@ -21,26 +22,26 @@ export class ReviewCommentsService {
     private readonly likeModel: Model<ReviewCommentLike>,
     @InjectModel(Review.name)
     private readonly reviewModel: Model<Review>,
+    @InjectModel(Content.name)
+    private readonly contentModel: Model<Content>,
     private readonly prisma: PrismaService,
     private readonly reviewsService: ReviewsService,
   ) {}
 
-  async create(reviewId: string, userId: string, comment: string, parentCommentId?: string) {
+  async create(reviewId: string, userId: string, comment: string, replyToCommentId?: string) {
     const review = await this.reviewModel.findById(String(reviewId));
     if (!review) throw new NotFoundException('Review not found');
 
     let finalComment = comment;
+    let replyToUserId: string | undefined = undefined;
 
-    if (parentCommentId) {
-      const parent = await this.commentModel.findById(parentCommentId);
-      if (!parent) throw new NotFoundException('Commentaire parent introuvable');
-
-      const parentUser = await this.prisma.user.findUnique({
-        where: { id: parent.userId },
-        select: { username: true },
-      });
-
-      const mention = parentUser?.username ? `@${parentUser.username} ` : '';
+    if (replyToCommentId) {
+      const repliedComment = await this.commentModel.findById(replyToCommentId);
+      if (!repliedComment) throw new NotFoundException('Commentaire cible introuvable');
+      replyToUserId = repliedComment.userId;
+      // Optionnel: préfixe le commentaire avec le @username (et non @id)
+      const userToMention = await this.prisma.user.findUnique({ where: { id: replyToUserId }, select: { username: true } });
+      const mention = userToMention && userToMention.username ? `@${userToMention.username} ` : '';
       finalComment = `${mention}${comment}`;
     }
 
@@ -48,19 +49,21 @@ export class ReviewCommentsService {
       reviewId: String(reviewId),
       userId,
       comment: finalComment,
-      parentCommentId: parentCommentId ?? null,
+      replyToCommentId: replyToCommentId ?? null,
       likesCount: 0,
-      repliesCount: 0,
     });
-    // MAJ compteur de commentaires sur la review
+
+    // MAJ compteur de commentaires sur la review (+1)
     await this.reviewsService.updateReviewCommentsCount(String(reviewId));
-    // MAJ compteur de replies sur le parent (si reply)
-    if (parentCommentId) {
-      await this.commentModel.updateOne(
-        { _id: parentCommentId },
-        { $inc: { repliesCount: 1 } }
+
+    // MAJ compteur de commentaires sur le content (+1)
+    if (review.contentId) {
+      await this.contentModel.updateOne(
+        { _id: review.contentId },
+        { $inc: { comments_count: 1 } }
       );
     }
+
     return created;
   }
 
@@ -73,12 +76,16 @@ export class ReviewCommentsService {
     await this.likeModel.deleteMany({ commentId });
     // MAJ compteur de commentaires sur la review
     await this.reviewsService.updateReviewCommentsCount(String(reviewId));
-    // MAJ compteur de replies sur le parent (si reply)
-    if (comment.parentCommentId) {
-      await this.commentModel.updateOne(
-        { _id: comment.parentCommentId },
-        { $inc: { repliesCount: -1 } }
-      );
+    // MAJ compteur de commentaires sur le content
+    if (comment.reviewId) {
+      // On récupère le contentId via la review
+      const review = await this.reviewModel.findById(comment.reviewId);
+      if (review && review.contentId) {
+        await this.contentModel.updateOne(
+          { _id: review.contentId },
+          { $inc: { comments_count: -1 } }
+        );
+      }
     }
     return { deleted: true };
   }
@@ -140,26 +147,6 @@ export class ReviewCommentsService {
     };
   }
 
-  private buildCommentThread(comments: any[]): any[] {
-    const commentMap: Record<string, any> = {};
-    const roots: any[] = [];
-    comments.forEach(comment => {
-      comment.replies = [];
-      commentMap[String(comment.id)] = comment;
-    });
-    comments.forEach(comment => {
-      if (comment.parentCommentId) {
-        const parent = commentMap[String(comment.parentCommentId)];
-        if (parent) {
-          parent.replies.push(comment);
-        }
-      } else {
-        roots.push(comment);
-      }
-    });
-    return roots;
-  }
-
   async getCommentsForReview(
     reviewId: string,
     userId?: string,
@@ -168,18 +155,15 @@ export class ReviewCommentsService {
     sort: 'date_desc' | 'date_asc' | 'likes_desc' = 'date_desc',
   ) {
     const skip = (page - 1) * limit;
+    let sortOrder: Record<string, SortOrder> = { createdAt: -1 };
 
-    const sortMap: Record<typeof sort, Record<string, SortOrder>> = {
-      date_desc: { createdAt: -1 },
-      date_asc: { createdAt: 1 },
-      likes_desc: { likesCount: -1, createdAt: 1 },
-    };
+    if (sort === 'date_asc') sortOrder = { createdAt: 1 };
+    if (sort === 'likes_desc') sortOrder = { likesCount: -1, createdAt: 1 };
 
-    // Récupère TOUS les commentaires pour la review (plus seulement les racines)
     const [rawComments, total] = await Promise.all([
       this.commentModel
         .find({ reviewId: String(reviewId) })
-        .sort(sortMap[sort])
+        .sort(sortOrder)
         .lean(),
       this.commentModel.countDocuments({ reviewId: String(reviewId) }),
     ]);
@@ -204,187 +188,104 @@ export class ReviewCommentsService {
     const usersMap = Object.fromEntries(users.map((u) => [u.id, u]));
     const likedSet = new Set(likedCommentIds.map(String));
 
-    // Ajoute parentCommentId dans enriched pour le threading
     const enriched = rawComments.map((c) => ({
       id: c._id,
       comment: c.comment,
       createdAt: c.createdAt,
-      user: usersMap[c.userId] || {
-        id: c.userId,
-        username: 'Utilisateur inconnu',
-        avatar: null,
-      },
+      user: usersMap[c.userId] || { id: c.userId, username: 'Utilisateur inconnu', avatar: null },
       likesCount: c.likesCount || 0,
       isLiked: likedSet.has(String(c._id)),
-      parentCommentId: c.parentCommentId || null,
+      replyToCommentId: c.replyToCommentId || null,
     }));
 
-    // Construit l'arbre des commentaires avec replies
-    const threaded = this.buildCommentThread(enriched);
-
-    // Pagination sur les racines uniquement
-    const paginatedRoots = threaded.slice(skip, skip + limit);
+    const paginatedRoots = enriched.slice(skip, skip + limit);
 
     return {
       data: paginatedRoots,
-      total: threaded.length,
+      total: enriched.length,
       page,
-      totalPages: Math.ceil(threaded.length / limit),
+      totalPages: Math.ceil(enriched.length / limit),
     };
   }
 
-  async getRepliesForComment(
-    parentCommentId: string,
+  async getAllCommentsForReview(
+    reviewId: string,
     userId?: string,
     page = 1,
-    limit = 5,
+    limit = 10,
     sort: 'date_desc' | 'date_asc' | 'likes_desc' = 'date_desc',
   ) {
     const skip = (page - 1) * limit;
-    const sortMap: Record<typeof sort, Record<string, SortOrder>> = {
-      date_desc: { createdAt: -1 },
-      date_asc: { createdAt: 1 },
-      likes_desc: { likesCount: -1, createdAt: 1 },
-    };
-
-    const [rawReplies, total] = await Promise.all([
+    let sortOrder: Record<string, SortOrder> = { createdAt: -1 };
+    if (sort === 'date_asc') sortOrder = { createdAt: 1 };
+    if (sort === 'likes_desc') sortOrder = { likesCount: -1, createdAt: 1 };
+    const [comments, total] = await Promise.all([
       this.commentModel
-        .find({ parentCommentId })
-        .sort(sortMap[sort])
+        .find({ reviewId: String(reviewId) })
+        .sort(sortOrder)
         .skip(skip)
         .limit(limit)
         .lean(),
-      this.commentModel.countDocuments({ parentCommentId }),
+      this.commentModel.countDocuments({ reviewId: String(reviewId) }),
     ]);
-
-    const userIds = [...new Set(rawReplies.map((c) => c.userId))] as string[];
-    const [users, likedCommentIds] = await Promise.all([
-      this.prisma.user.findMany({
-        where: { id: { in: userIds } },
-        select: { id: true, username: true, avatar: true },
-      }),
-      userId
-        ? this.likeModel
-            .find({
-              userId,
-              commentId: { $in: rawReplies.map((c) => String(c._id)) },
-            })
-            .distinct('commentId')
-        : [],
-    ]);
+    const userIds = [...new Set(comments.map((r) => r.userId))] as string[];
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, username: true, avatar: true },
+    });
     const usersMap = Object.fromEntries(users.map((u) => [u.id, u]));
-    const likedSet = new Set(likedCommentIds.map(String));
-    const enriched = rawReplies.map((c) => ({
-      id: c._id,
-      comment: c.comment,
-      createdAt: c.createdAt,
-      user: usersMap[c.userId] || {
-        id: c.userId,
-        username: 'Utilisateur inconnu',
-        avatar: null,
-      },
-      likesCount: c.likesCount || 0,
-      isLiked: likedSet.has(String(c._id)),
-      parentCommentId: c.parentCommentId || null,
-      repliesCount: c.repliesCount || 0,
-    }));
     return {
-      data: enriched,
+      data: comments.map((c) => ({
+        id: c._id,
+        comment: c.comment,
+        createdAt: c.createdAt,
+        user: usersMap[c.userId] || { id: c.userId, username: 'Utilisateur inconnu', avatar: null },
+        likesCount: c.likesCount || 0,
+        isLiked: false, // à adapter selon logique
+        replyToCommentId: c.replyToCommentId || null,
+      })),
       total,
       page,
       totalPages: Math.ceil(total / limit),
     };
   }
 
-  async getRootCommentsForReview(
-    reviewId: string,
+  async getRepliesForComment(
+    commentId: string,
     userId?: string,
     page = 1,
-    limit = 10,
-    repliesLimit = 2,
+    limit = 5,
     sort: 'date_desc' | 'date_asc' | 'likes_desc' = 'date_desc',
   ) {
     const skip = (page - 1) * limit;
-    const sortMap: Record<typeof sort, Record<string, SortOrder>> = {
-      date_desc: { createdAt: -1 },
-      date_asc: { createdAt: 1 },
-      likes_desc: { likesCount: -1, createdAt: 1 },
-    };
-
-    // DEBUG LOGS pour analyse
-    console.log('reviewId reçu:', reviewId, 'type:', typeof reviewId);
-    const debugRoots = await this.commentModel.find({ reviewId: String(reviewId), parentCommentId: null }).lean();
-    console.log('Commentaires racines trouvés:', debugRoots.length, debugRoots.map(c => ({ _id: c._id, reviewId: c.reviewId, parentCommentId: c.parentCommentId })));
-
-    // 1. On récupère les commentaires racines paginés
-    const [roots, total] = await Promise.all([
+    let sortOrder: Record<string, SortOrder> = { createdAt: -1 };
+    if (sort === 'date_asc') sortOrder = { createdAt: 1 };
+    if (sort === 'likes_desc') sortOrder = { likesCount: -1, createdAt: 1 };
+    const [replies, total] = await Promise.all([
       this.commentModel
-        .find({ reviewId: String(reviewId), parentCommentId: null })
-        .sort(sortMap[sort])
+        .find({ replyToCommentId: commentId })
+        .sort(sortOrder)
         .skip(skip)
         .limit(limit)
         .lean(),
-      this.commentModel.countDocuments({ reviewId: String(reviewId), parentCommentId: null }),
+      this.commentModel.countDocuments({ replyToCommentId: commentId }),
     ]);
-    const rootIds = roots.map((c) => String(c._id));
-    const userIds = [...new Set(roots.map((c) => c.userId))] as string[];
-
-    // 2. On récupère les N premières replies pour chaque racine
-    const replies = await this.commentModel.find({ parentCommentId: { $in: rootIds } })
-      .sort({ createdAt: 1 }) // ou tri par likes etc si besoin
-      .lean();
-    // On groupe les replies par parent
-    const repliesByParent: Record<string, any[]> = {};
-    for (const reply of replies) {
-      const parentId = String(reply.parentCommentId);
-      if (!repliesByParent[parentId]) repliesByParent[parentId] = [];
-      if (repliesByParent[parentId].length < repliesLimit) {
-        repliesByParent[parentId].push(reply);
-      }
-    }
-    // On récupère les users et likes des roots + replies
-    const allReplyUserIds = replies.flatMap((c) => c.userId);
-    const allUserIds = [...new Set([...userIds, ...allReplyUserIds])];
-    const [users, likedCommentIds] = await Promise.all([
-      this.prisma.user.findMany({
-        where: { id: { in: allUserIds } },
-        select: { id: true, username: true, avatar: true },
-      }),
-      userId
-        ? this.likeModel
-            .find({
-              userId,
-              commentId: { $in: [...rootIds, ...replies.map((r) => String(r._id))] },
-            })
-            .distinct('commentId')
-        : [],
-    ]);
-    const usersMap = Object.fromEntries(users.map((u) => [u.id, u]));
-    const likedSet = new Set(likedCommentIds.map(String));
-    // 3. On enrichit les replies
-    const enrichReply = (c: any) => ({
-      id: c._id,
-      comment: c.comment,
-      createdAt: c.createdAt,
-      user: usersMap[c.userId] || { id: c.userId, username: 'Utilisateur inconnu', avatar: null },
-      likesCount: c.likesCount || 0,
-      isLiked: likedSet.has(String(c._id)),
-      parentCommentId: c.parentCommentId || null,
-      repliesCount: c.repliesCount || 0,
+    const userIds = [...new Set(replies.map((r) => r.userId))] as string[];
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, username: true, avatar: true },
     });
-    // 4. On enrichit les racines avec leurs replies paginées et le count
-    const enrichedRoots = roots.map((c) => ({
-      id: c._id,
-      comment: c.comment,
-      createdAt: c.createdAt,
-      user: usersMap[c.userId] || { id: c.userId, username: 'Utilisateur inconnu', avatar: null },
-      likesCount: c.likesCount || 0,
-      isLiked: likedSet.has(String(c._id)),
-      replies: (repliesByParent[String(c._id)] || []).map(enrichReply),
-      repliesCount: c.repliesCount || 0,
-    }));
+    const usersMap = Object.fromEntries(users.map((u) => [u.id, u]));
     return {
-      data: enrichedRoots,
+      data: replies.map((c) => ({
+        id: c._id,
+        comment: c.comment,
+        createdAt: c.createdAt,
+        user: usersMap[c.userId] || { id: c.userId, username: 'Utilisateur inconnu', avatar: null },
+        likesCount: c.likesCount || 0,
+        isLiked: false, // à adapter selon logique
+        replyToCommentId: c.replyToCommentId || null,
+      })),
       total,
       page,
       totalPages: Math.ceil(total / limit),

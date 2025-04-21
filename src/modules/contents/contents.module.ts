@@ -19,6 +19,6 @@ import { AuthModule } from '../auth/auth.module';
   ],
   controllers: [ContentsController],
   providers: [ContentsService, ContentsRepository],
-  exports: [ContentsService, ContentsRepository],
+  exports: [ContentsService, ContentsRepository, MongooseModule],
 })
 export class ContentsModule {}

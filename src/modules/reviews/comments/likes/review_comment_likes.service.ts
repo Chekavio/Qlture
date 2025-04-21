@@ -24,12 +24,20 @@ export class ReviewCommentLikesService {
 
     if (existing) {
       await this.likeModel.deleteOne({ _id: existing._id });
-      await this.reviewsService.updateCommentLikesCount(commentId);
+      // Atomique: décrémente le compteur
+      await this.commentModel.updateOne(
+        { _id: commentId },
+        { $inc: { likesCount: -1 } }
+      );
       return { liked: false };
     }
 
     await this.likeModel.create({ commentId, userId });
-    await this.reviewsService.updateCommentLikesCount(commentId);
+    // Atomique: incrémente le compteur
+    await this.commentModel.updateOne(
+      { _id: commentId },
+      { $inc: { likesCount: 1 } }
+    );
     return { liked: true };
   }
 

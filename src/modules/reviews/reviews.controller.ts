@@ -35,6 +35,7 @@ import {
     constructor(private readonly reviewsService: ReviewsService) {}
   
     @Post()
+    @ApiBearerAuth('JWT-auth')
     @ApiOperation({ summary: 'Créer une review (note + commentaire OU juste commentaire)' })
     @ApiResponse({ status: 201, description: 'Review créée avec succès' })
     @ApiResponse({ status: 409, description: 'Une review existe déjà pour ce contenu' })
@@ -47,6 +48,7 @@ import {
     }
   
     @Post('rating')
+    @ApiBearerAuth('JWT-auth')
     @ApiOperation({ summary: 'Ajouter uniquement une note à un contenu' })
     @ApiBody({ schema: { properties: { contentId: { type: 'string' }, rating: { type: 'number', minimum: 0.5, maximum: 5 } }, required: ['contentId', 'rating'] } })
     @ApiResponse({ status: 201, description: 'Note ajoutée avec succès' })
@@ -59,6 +61,7 @@ import {
     }
   
     @Patch(':contentId')
+    @ApiBearerAuth('JWT-auth')
     @ApiOperation({ summary: 'Modifier une review existante' })
     @ApiParam({ name: 'contentId', type: 'string' })
     @ApiResponse({ status: 200, description: 'Review mise à jour' })
@@ -74,6 +77,7 @@ import {
   
     @Delete(':contentId')
     @HttpCode(HttpStatus.NO_CONTENT)
+    @ApiBearerAuth('JWT-auth')
     @ApiOperation({ summary: 'Supprimer la review de l’utilisateur pour un contenu' })
     @ApiParam({ name: 'contentId', type: 'string' })
     @ApiResponse({ status: 204, description: 'Review supprimée' })
