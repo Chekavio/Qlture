@@ -13,7 +13,6 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
-import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
@@ -41,10 +40,6 @@ import { APP_GUARD } from '@nestjs/core';
     GoogleStrategy,
     JwtAuthGuard,
     OptionalJwtAuthGuard,
-    {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
-    },
   ],
   exports: [
     TokenService,

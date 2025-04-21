@@ -19,11 +19,13 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    console.log('>>> [DEBUG] JwtAuthGuard called (route =', context.switchToHttp().getRequest().url, ')');
     console.log('JwtAuthGuard called');
     const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
       context.getHandler(),
       context.getClass(),
     ]);
+    console.log('[DEBUG JwtAuthGuard] isPublic:', isPublic, 'handler:', context.getHandler().name, 'class:', context.getClass().name, 'url:', context.switchToHttp().getRequest().url);
 
     if (isPublic) {
       return true;
