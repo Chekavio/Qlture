@@ -25,35 +25,65 @@ export class Content extends Document {
   genres: string[] | undefined;
 
   @Prop({ type: Object, default: undefined })
-  metadata: {
-    subtitle?: string | null;
-    language?: string | null;
-    publisher?: string[] | undefined;
-    director?: string | null;
-    actors?: string[] | undefined;
-    platforms?: string[] | undefined;
-    developers?: string[] | undefined;
-    authors?: string[] | undefined;
-    page_count?: number | null;
-    pagination?: string | null;
-    isbn?: string | null;
-    isbn_10?: string | null;
-    isbn_13?: string | null;
-    openlibrary_edition_id?: string | null;
-    work_id?: string | null;
-    publish_country?: string | null;
-    publish_places?: string[] | undefined;
-    identifiers?: Record<string, any> | undefined;
-    series?: string[] | undefined;
-    contributors?: { role: string; name: string }[] | undefined;
-    translated_from?: string[] | undefined;
-    weight?: string | null;
-    physical_format?: string | null;
-    dimensions?: string | null;
-    artist?: string | null;
-    tracks?: string[] | undefined;
-    duration?: number | null;
-  };
+metadata: {
+  // 🎥 Films
+  director?: string | null;
+  actors?: string[] | undefined;
+
+  // 📚 Livres
+  authors?: string[] | undefined;
+  subtitle?: string | null;
+  page_count?: number | null;
+  pagination?: string | null;
+  isbn?: string | null;
+  isbn_10?: string | null;
+  isbn_13?: string | null;
+  openlibrary_edition_id?: string | null;
+  work_id?: string | null;
+  publish_country?: string | null;
+  publish_places?: string[] | undefined;
+  contributors?: { role: string; name: string }[] | undefined;
+  translated_from?: string[] | undefined;
+
+  // 💽 Albums (si tu gardes ce type-là)
+  artist?: string | null;
+  tracks?: string[] | undefined;
+  duration?: number | null;
+
+  // 🎮 Jeux vidéo
+  developers?: string[] | undefined;
+  publishers?: string[] | undefined;
+  platforms?: string[] | undefined;
+  gameplay?: string[] | undefined; // Ex: RPG, platformer, shooter
+  game_modes?: string[] | undefined; // Solo, Multi, Coop
+  engine?: string | null; // Unity, Unreal Engine…
+  player_perspectives?: string[] | undefined; // FPS, TPS, isometric…
+  franchise?: string | null;
+  series?: string[] | undefined;
+  story?: string | null; // Différent du résumé principal
+  youtube_trailer_id?: string | null;
+  igdb_id?: string | null;
+  
+  release_type?: 'full' | 'alpha' | 'beta' | 'early_access' | 'offline' | 'cancelled' | 'rumored' | 'delisted' | 'unknown';
+  release_versions?: {
+    platform?: string;
+    region?: string;
+    date?: Date | null;
+    category?: 'full' | 'alpha' | 'beta' | 'early_access' | 'offline' | 'cancelled' | 'rumored' | 'delisted' | 'unknown';
+  }[];
+
+  // 🎨 Médias enrichis
+  back_cover_url?: string | null; // Image grand format pour arrière-plan
+
+  // Divers
+  language?: string | null;
+  identifiers?: Record<string, any> | undefined;
+  weight?: string | null;
+  physical_format?: string | null;
+  dimensions?: string | null;
+  websites?: string[] | undefined;
+}
+
 
   @Prop({ type: Number, default: 0 })
   likes_count: number;

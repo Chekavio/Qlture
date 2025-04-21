@@ -256,6 +256,7 @@ export class ContentsController {
 
   @Public()
   @UseGuards(OptionalJwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Get()
   @ApiOperation({ summary: 'Récupérer tous les contenus avec pagination' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -267,6 +268,7 @@ export class ContentsController {
 
   @Public()
   @UseGuards(OptionalJwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @Get('monthly-releases')
   @ApiOperation({ summary: 'Get current month releases ranked by rating' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -290,6 +292,7 @@ export class ContentsController {
     );
   }
 
+  @Public()
   @UseGuards(OptionalJwtAuthGuard)
   @Get(':id')
   @ApiOperation({ summary: 'Get content by ID, with isLiked if user is logged in' })
