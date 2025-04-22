@@ -230,6 +230,28 @@ export class AuthService {
     return { message: 'Password reset instructions sent to your email' };
   }
 
+  async initiatePasswordResetFromUserId(userId: string): Promise<{ message: string }> {
+    // Find user by ID
+    const user = await this.userService.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    // Generate reset token
+    const { token: resetToken, expires } = this.tokenService.generatePasswordResetToken();
+    // Store reset token with expiry
+    await this.prisma.passwordReset.create({
+      data: {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        token: await bcrypt.hash(resetToken, 10),
+        expiresAt: expires,
+      },
+    });
+    // Send reset email
+    await this.emailService.sendPasswordResetEmail(user.email, resetToken);
+    return { message: 'Password reset instructions sent to your email' };
+  }
+
   async resetPassword(
     resetPasswordDto: ResetPasswordDto,
   ): Promise<{ message: string }> {

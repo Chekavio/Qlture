@@ -125,7 +125,8 @@ export class UserService {
     await this.checkUsernameAvailability(createUserDto.username);
 
     const { password, ...userData } = createUserDto;
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Only hash if not already hashed (assume bcrypt hashes always start with $2)
+    const hashedPassword = password.startsWith('$2') ? password : await bcrypt.hash(password, 10);
     const now = new Date();
 
     const user = await this.prisma.user.create({

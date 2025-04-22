@@ -24,6 +24,7 @@ import {
   ApiBearerAuth,
   ApiBody,
 } from '@nestjs/swagger';
+import { CurrentUser } from '../../common/decorators/user.decorator';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -134,6 +135,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Request password reset' })
   @ApiResponse({ status: 200, description: 'Reset password email sent' })
   @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiBody({ schema: { type: 'object', properties: { email: { type: 'string', example: 'user@email.com' } }, required: ['email'] } })
   async requestPasswordReset(@Body('email') email: string) {
     return this.authService.initiatePasswordReset(email);
   }
@@ -145,6 +147,15 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Invalid or expired token' })
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  @Public()
+  @Post('reset-password/from-email')
+  @ApiOperation({ summary: 'Reset password for the currently authenticated user, by sending a reset email to their address' })
+  @ApiResponse({ status: 200, description: 'Reset password email sent' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async resetPasswordFromEmail(@CurrentUser('sub') userId: string) {
+    return this.authService.initiatePasswordResetFromUserId(userId);
   }
 
   @Public()
