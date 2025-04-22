@@ -16,13 +16,23 @@ export class HistoryService {
   async addItem(userId: string, contentId: string, type: string, consumedAt?: string) {
     try {
       // Convertit consumedAt en Date si fourni (Mongoose accepte string ISO ou Date)
+      let consumedDate: Date | undefined = undefined;
+      if (consumedAt) {
+        consumedDate = new Date(consumedAt);
+      }
       const toCreate = {
         userId,
         contentId,
         type,
-        consumedAt: consumedAt ? new Date(consumedAt) : undefined,
+        // Si consumedAt non fourni, sera défini à createdAt après création
+        consumedAt: consumedDate,
       };
       const item = await this.historyModel.create(toCreate);
+      // Si consumedAt non fourni, update avec createdAt
+      if (!consumedAt && item.createdAt) {
+        item.consumedAt = item.createdAt;
+        await item.save();
+      }
       // Simple $inc suffit : Mongo crée le champ si absent
       await this.contentModel.updateOne(
         { _id: contentId },
