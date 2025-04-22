@@ -131,7 +131,7 @@ export class HistoryService {
       consumedAt: i.consumedAt,
       user: usersMap[i.userId] || { id: i.userId, username: 'Utilisateur inconnu', avatar: null },
       title: contentsMap[String(i.contentId)]?.title || null,
-      cover_url: contentsMap[String(i.contentId)]?.image_url || null,
+      image_url: contentsMap[String(i.contentId)]?.image_url || null,
     }));
     return {
       data,

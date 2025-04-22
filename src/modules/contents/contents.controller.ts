@@ -306,13 +306,14 @@ export class ContentsController {
       query.limit ?? 10,
       query.type
     );
-    // Map to only return id, title, release_date, average_rating, type (id first)
+    // Map to only return id, title, release_date, average_rating, type, cover_url (id first)
     return results.map(content => ({
       id: content._id?.toString?.() ?? content.id ?? content._id,
       title: content.title,
       release_date: content.release_date,
       average_rating: content.average_rating,
       type: content.type,
+      cover_url: content.image_url ?? null,
     }));
   }
 
@@ -331,13 +332,15 @@ export class ContentsController {
       query.limit ?? 10,
       query.type
     );
-    // Map to only return id, title, release_date, likes_count, type (id first)
+    // Map to only return id, title, release_date, likes_count, type, cover_url, average_rating (id first)
     return results.map(content => ({
       id: content._id?.toString?.() ?? content.id ?? content._id,
       title: content.title,
       release_date: content.release_date,
       likes_count: content.likes_count,
       type: content.type,
+      cover_url: content.image_url ?? null,
+      average_rating: content.average_rating,
     }));
   }
 
