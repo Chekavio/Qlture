@@ -74,6 +74,13 @@ model User {
   Follower_Follower_followerIdToUser  Follower[]      @relation("Follower_followerIdToUser")
   Follower_Follower_followingIdToUser Follower[]      @relation("Follower_followingIdToUser")
   PasswordReset                       PasswordReset[]
+  review_count        Int      @default(0)
+  moovie_count        Int      @default(0)
+  book_count          Int      @default(0)
+  games_count         Int      @default(0)
+  watch_list_count    Int      @default(0)
+  read_list_count     Int      @default(0)
+  game_list_count     Int      @default(0)
 
   @@index([email])
 }

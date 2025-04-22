@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "book_count" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "game_list_count" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "games_count" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "moovie_count" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "read_list_count" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "review_count" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "watch_list_count" INTEGER NOT NULL DEFAULT 0;

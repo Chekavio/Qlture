@@ -4,12 +4,14 @@ import { Model } from 'mongoose';
 import { WishlistItem } from './wishlist_item.schema';
 import { CreateWishlistItemDto } from './dto/create-wishlist-item.dto';
 import { Content } from '../contents/contents.schema';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class WishlistService {
   constructor(
     @InjectModel(WishlistItem.name) private readonly wishlistModel: Model<WishlistItem>,
     @InjectModel(Content.name) private readonly contentModel: Model<Content>,
+    private readonly prisma: PrismaService,
   ) {}
 
   async addItem(dto: CreateWishlistItemDto) {
@@ -20,6 +22,23 @@ export class WishlistService {
         { _id: dto.contentId },
         { $inc: { wishlist_count: 1 } }
       );
+      // Increment user list count atomically
+      if (dto.type === 'movie') {
+        await this.prisma.user.update({
+          where: { id: dto.userId },
+          data: { watch_list_count: { increment: 1 } },
+        });
+      } else if (dto.type === 'book') {
+        await this.prisma.user.update({
+          where: { id: dto.userId },
+          data: { read_list_count: { increment: 1 } },
+        });
+      } else if (dto.type === 'game') {
+        await this.prisma.user.update({
+          where: { id: dto.userId },
+          data: { game_list_count: { increment: 1 } },
+        });
+      }
       return item;
     } catch (err) {
       if (err.code === 11000) throw new ConflictException('Déjà dans la wishlist');
@@ -35,6 +54,23 @@ export class WishlistService {
       { _id: contentId },
       { $inc: { wishlist_count: -1 } }
     );
+    // Decrement user list count atomically
+    if (type === 'movie') {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { watch_list_count: { decrement: 1 } },
+      });
+    } else if (type === 'book') {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { read_list_count: { decrement: 1 } },
+      });
+    } else if (type === 'game') {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { game_list_count: { decrement: 1 } },
+      });
+    }
     return { deleted: true };
   }
 

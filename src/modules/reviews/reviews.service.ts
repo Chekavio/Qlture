@@ -34,9 +34,22 @@ export class ReviewsService {
     const existing = await this.reviewModel.findOne({ userId, contentId });
     if (existing) {
       // If review exists, update it (add reviewText and/or change rating)
+      const wasOnlyRating = !existing.reviewText || existing.reviewText.trim() === '';
+      const isNowReview = reviewText && reviewText.trim() !== '';
       if (rating !== undefined) existing.rating = rating;
       existing.reviewText = reviewText;
       await existing.save();
+      // Si on passe d'une rating seule à une vraie review, incrémente le compteur
+      if (wasOnlyRating && isNowReview) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { review_count: { increment: 1 } },
+        });
+        await this.contentModel.updateOne(
+          { _id: contentId },
+          { $inc: { reviews_count: 1 } }
+        );
+      }
       await this.updateContentStats(contentId);
       return existing;
     }
@@ -57,6 +70,11 @@ export class ReviewsService {
     });
 
     await this.updateContentStats(contentId);
+    // Increment user review_count atomically
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { review_count: { increment: 1 } },
+    });
     return review;
   }
 
@@ -92,10 +110,35 @@ export class ReviewsService {
     const review = await this.reviewModel.findOne({ userId, contentId });
     if (!review) throw new NotFoundException('Review not found');
 
+    const hadReview = review.reviewText && review.reviewText.trim() !== '';
+    const willHaveReview = dto.reviewText && dto.reviewText.trim() !== '';
+
     if (dto.rating !== undefined) review.rating = dto.rating;
     if (dto.reviewText !== undefined) review.reviewText = dto.reviewText;
 
     await review.save();
+    // Si on passe d'une review à une rating seule, décrémente le compteur
+    if (hadReview && !willHaveReview) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { review_count: { decrement: 1 } },
+      });
+      await this.contentModel.updateOne(
+        { _id: contentId },
+        { $inc: { reviews_count: -1 } }
+      );
+    }
+    // Si on passe d'une rating seule à une review, incrémente le compteur
+    if (!hadReview && willHaveReview) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { review_count: { increment: 1 } },
+      });
+      await this.contentModel.updateOne(
+        { _id: contentId },
+        { $inc: { reviews_count: 1 } }
+      );
+    }
     await this.updateContentStats(contentId);
     return review;
   }
@@ -107,6 +150,11 @@ export class ReviewsService {
     await this.reviewModel.deleteOne({ _id: review._id });
     await this.cleanupService.cleanupReviewData(String(review._id), contentId);
     await this.updateContentStats(contentId);
+    // Decrement user review_count atomically
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { review_count: { decrement: 1 } },
+    });
   }
 
   async updateContentStats(contentId: string): Promise<void> {

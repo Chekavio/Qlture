@@ -1,7 +1,6 @@
 import { Controller, Post, Delete, Get, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { HistoryService } from './history.service';
-import { CreateHistoryItemDto } from './dto/create-history-item.dto';
-import { ApiTags, ApiOperation, ApiParam, ApiResponse, ApiQuery, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiParam, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/user.decorator';
 
@@ -12,16 +11,19 @@ import { CurrentUser } from '../../common/decorators/user.decorator';
 export class HistoryController {
   constructor(private readonly historyService: HistoryService) {}
 
-  @Post()
+  @Post(':type/:contentId')
   @ApiOperation({ summary: 'Ajouter un contenu à la liste historique (vu/lu/...)' })
-  @ApiBody({ type: CreateHistoryItemDto })
+  @ApiParam({ name: 'type', enum: ['movie', 'book', 'game', 'album'] })
+  @ApiParam({ name: 'contentId', type: 'string' })
+  @ApiQuery({ name: 'consumedAt', required: false, description: 'Date de consommation (ISO string)' })
   @ApiResponse({ status: 201 })
   async addItem(
-    @Body() dto: CreateHistoryItemDto,
+    @Param('type') type: string,
+    @Param('contentId') contentId: string,
+    @Query('consumedAt') consumedAt: string | undefined,
     @CurrentUser('sub') userId: string,
   ) {
-    // Passe consumedAt tel quel (string ISO), le service ou le schema se charge de la conversion
-    return this.historyService.addItem({ ...dto, userId });
+    return this.historyService.addItem(userId, contentId, type, consumedAt);
   }
 
   @Delete(':type/:contentId')

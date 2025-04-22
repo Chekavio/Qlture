@@ -63,6 +63,7 @@ async function fetchGames(offset: number) {
     'platforms.name',
     'involved_companies.company.name',
     'involved_companies.developer',
+    'involved_companies.publisher',
     'summary',
     'cover.url',
     'screenshots.url',
@@ -71,6 +72,7 @@ async function fetchGames(offset: number) {
     'storyline',
     'game_modes.name',
     'status',
+    'collection',
     'collection.name',
     'websites.url',
     'release_dates.category',
@@ -120,11 +122,7 @@ function formatGameData(game: any) {
   // Cover en t_cover_big
   const coverUrl = getIgdbImageUrl(game.cover?.url, 't_cover_big');
   // Screenshots en t_1080p si possible, sinon t_720p
-  const screenshots = (game.screenshots || []).map((s: any) => {
-    let url1080 = getIgdbImageUrl(s.url, 't_1080p');
-    let url720 = getIgdbImageUrl(s.url, 't_720p');
-    return url1080 || url720;
-  }).filter(Boolean);
+  const screenshotsArr = (game.screenshots || []).map((s: any) => getIgdbImageUrl(s.url, 't_1080p')).filter(Boolean);
 
   // Recherche de la release date
   let releaseDate: Date | null = null;
@@ -163,19 +161,14 @@ function formatGameData(game: any) {
     }
   }
 
-  // Publishers : vrai champ + fallback sur developers si vide
-  let publishers = (game.involved_companies || [])
-    .filter((c: any) => c.publisher)
-    .map((c: any) => c.company?.name)
-    .filter(Boolean);
-  if (publishers.length === 0) {
-    const devs = (game.involved_companies || [])
-      .filter((c: any) => c.developer)
-      .map((c: any) => c.company?.name)
-      .filter(Boolean);
-    if (devs.length === 1) {
-      publishers = devs;
-    }
+  // --- Developers & Publishers mapping (no fallback) ---
+  const involved = Array.isArray(game.involved_companies) ? game.involved_companies : [];
+  const developers = involved.filter((c: any) => c.developer).map((c: any) => c.company?.name).filter(Boolean);
+  const publishers = involved.filter((c: any) => c.publisher).map((c: any) => c.company?.name).filter(Boolean);
+
+  // DEBUG: Log collection field for Doritos Crash Course
+  if (game.name && game.name.toLowerCase().includes('doritos crash course')) {
+    console.log('[DEBUG COLLECTION FIELD]', game.name, JSON.stringify(game.collection));
   }
 
   return {
@@ -183,17 +176,13 @@ function formatGameData(game: any) {
     title_vo: game.name,
     type: 'game',
     description: game.summary || '',
-    description_vo: game.storyline || game.summary || '',
+    description_vo: game.summary || '',
     release_date: releaseDate,
     genres: (game.themes || []).map((t: any) => t.name).filter(Boolean),
     image_url: coverUrl,
-    screenshots: screenshots,
     metadata: {
       igdb_id: String(game.id),
-      developers: (game.involved_companies || [])
-        .filter((c: any) => c.developer)
-        .map((c: any) => c.company?.name)
-        .filter(Boolean),
+      developers,
       publishers,
       platforms: (game.platforms || []).map((p: any) => p.name).filter(Boolean),
       type: (game.genres || []).map((g: any) => g.name).filter(Boolean),
@@ -202,7 +191,8 @@ function formatGameData(game: any) {
       engine: game.game_engines?.[0]?.name || null,
       series: game.collection?.name ? [game.collection.name] : [],
       story: game.storyline || null,
-      back_cover_url: screenshots[0] || null,
+      back_cover_url: screenshotsArr[0] || null,
+      screenshots: screenshotsArr,
       websites: (game.websites || []).map((w: any) => w.url).filter(Boolean),
       release_type: releaseType,
       release_versions
@@ -260,9 +250,17 @@ async function importGames() {
 
     await Promise.all(games.map(game => limit(async () => {
       const doc = formatGameData(game);
+      const hasPublisher = Array.isArray(doc.metadata.publishers) && doc.metadata.publishers.length > 0;
+      const hasDeveloper = Array.isArray(doc.metadata.developers) && doc.metadata.developers.length > 0;
+      // Log only if both publisher and developer are present
+      if (hasPublisher && hasDeveloper) {
+        console.log(chalk.magenta(`[PUB/DEV] ${doc.title} | Publishers: ${doc.metadata.publishers.join(', ')} | Developers: ${doc.metadata.developers.join(', ')}`));
+      }
+      // Log games with a series
+      if (doc.metadata.series && doc.metadata.series.length > 0) {
+        console.log(chalk.cyan(`[SERIES] ${doc.title} | Series: ${doc.metadata.series.join(', ')}`));
+      }
       const query = { type: 'game', 'metadata.igdb_id': doc.metadata.igdb_id };
-      console.log(chalk.yellow('\n[DEBUG] Query:'), JSON.stringify(query));
-      console.log(chalk.yellow('[DEBUG] Doc:'), JSON.stringify(doc, null, 2));
       try {
         await ContentModel.findOneAndUpdate(
           query,
