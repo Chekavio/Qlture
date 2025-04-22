@@ -549,6 +549,8 @@ export class ReviewsService {
     });
     const usersMap = Object.fromEntries(users.map(u => [u.id, u]));
     // 4. Format minimal pour la réponse (optimisé)
+    const contents = await this.contentModel.find({ _id: { $in: reviews.map(r => r.contentId) } }).lean();
+    const contentsMap = Object.fromEntries(contents.map(c => [c._id.toString(), c]));
     const data = reviews.map(r => ({
       id: r._id,
       contentId: r.contentId,
@@ -559,6 +561,12 @@ export class ReviewsService {
       user: usersMap[r.userId] || { id: r.userId, username: 'Utilisateur inconnu', avatar: null },
       likesCount: r.likesCount,
       commentsCount: r.commentsCount,
+      // Ajout: forcer _id pour content
+      content: contentsMap[r.contentId] ? {
+        _id: contentsMap[r.contentId]._id?.toString?.() ?? contentsMap[r.contentId].id ?? contentsMap[r.contentId]._id,
+        title: contentsMap[r.contentId].title || null,
+        image_url: contentsMap[r.contentId].image_url || null,
+      } : undefined,
     }));
     return {
       data,

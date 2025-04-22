@@ -306,9 +306,8 @@ export class ContentsController {
       query.limit ?? 10,
       query.type
     );
-    // Map to only return id, title, release_date, average_rating, type, image_url (id first)
     return results.map(content => ({
-      id: content._id?.toString?.() ?? content.id ?? content._id,
+      _id: content._id?.toString?.() ?? content.id ?? content._id,
       title: content.title,
       release_date: content.release_date,
       average_rating: content.average_rating,
@@ -332,9 +331,8 @@ export class ContentsController {
       query.limit ?? 10,
       query.type
     );
-    // Map to only return id, title, release_date, likes_count, type, image_url, average_rating (id first)
     return results.map(content => ({
-      id: content._id?.toString?.() ?? content.id ?? content._id,
+      _id: content._id?.toString?.() ?? content.id ?? content._id,
       title: content.title,
       release_date: content.release_date,
       likes_count: content.likes_count,
@@ -359,9 +357,8 @@ export class ContentsController {
       query.limit ?? 10,
       query.type
     );
-    // Map to only return id, title, release_date, wishlist_count, type, average_rating, image_url (id first)
     return results.map(content => ({
-      id: content._id?.toString?.() ?? content.id ?? content._id,
+      _id: content._id?.toString?.() ?? content.id ?? content._id,
       title: content.title,
       release_date: content.release_date,
       wishlist_count: content.wishlist_count,

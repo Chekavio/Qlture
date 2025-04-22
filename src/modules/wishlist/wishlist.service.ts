@@ -124,8 +124,11 @@ export class WishlistService {
       type: i.type,
       createdAt: i.createdAt,
       user: usersMap[i.userId] || { id: i.userId, username: 'Utilisateur inconnu', avatar: null },
-      title: contentsMap[String(i.contentId)]?.title || null,
-      image_url: contentsMap[String(i.contentId)]?.image_url || null,
+      content: {
+        _id: contentsMap[String(i.contentId)]?._id?.toString?.() ?? contentsMap[String(i.contentId)]?.id ?? contentsMap[String(i.contentId)]?._id,
+        title: contentsMap[String(i.contentId)]?.title || null,
+        image_url: contentsMap[String(i.contentId)]?.image_url || null,
+      },
     }));
     return {
       data,
