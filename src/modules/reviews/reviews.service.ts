@@ -34,7 +34,9 @@ export class ReviewsService {
     const existing = await this.reviewModel.findOne({ userId, contentId });
     if (existing) {
       // If review exists, update it (add reviewText and/or change rating)
-      const wasOnlyRating = !existing.reviewText || existing.reviewText.trim() === '';
+      const wasOnlyRating =
+        !existing.reviewText ||
+        (typeof existing.reviewText === 'string' && existing.reviewText.trim() === '');
       const isNowReview = reviewText && reviewText.trim() !== '';
       if (rating !== undefined) existing.rating = rating;
       existing.reviewText = reviewText;
