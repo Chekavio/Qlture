@@ -119,7 +119,7 @@ export class HistoryService {
       select: { id: true, username: true, avatar: true },
     });
     const usersMap = Object.fromEntries(users.map(u => [u.id, u]));
-    // 4. Récupérer les contenus (pour cover_url et title)
+    // 4. Récupérer les contenus (pour image_url et title)
     const contentIds = [...new Set(items.map(i => i.contentId))];
     const contents = await this.contentModel.find({ _id: { $in: contentIds } }, { title: 1, image_url: 1 }).lean();
     const contentsMap = Object.fromEntries(contents.map(c => [String(c._id), c]));
