@@ -34,15 +34,18 @@ export class ReviewsService {
     const existing = await this.reviewModel.findOne({ userId, contentId });
     if (existing) {
       // If review exists, update it (add reviewText and/or change rating)
-      const wasOnlyRating =
-        !existing.reviewText ||
-        (typeof existing.reviewText === 'string' && existing.reviewText.trim() === '');
-      const isNowReview = reviewText && reviewText.trim() !== '';
+      const hadText = typeof existing.reviewText === 'string' && existing.reviewText.trim() !== '';
+      const newText = typeof reviewText === 'string' && reviewText.trim() !== '';
+      const textChanged = newText && reviewText !== existing.reviewText;
       if (rating !== undefined) existing.rating = rating;
       existing.reviewText = reviewText;
+      // Ajout : si on ajoute OU modifie le texte, set reviewTextAddedAt
+      if (newText && (!hadText || textChanged)) {
+        existing.reviewTextAddedAt = new Date();
+      }
       await existing.save();
       // Si on passe d'une rating seule à une vraie review, incrémente le compteur
-      if (wasOnlyRating && isNowReview) {
+      if (!hadText && newText) {
         await this.prisma.user.update({
           where: { id: userId },
           data: { review_count: { increment: 1 } },
@@ -69,6 +72,7 @@ export class ReviewsService {
       type,
       likesCount: 0,
       commentsCount: 0,
+      reviewTextAddedAt: reviewText ? new Date() : undefined,
     });
 
     await this.updateContentStats(contentId);
@@ -114,9 +118,25 @@ export class ReviewsService {
 
     const hadReview = review.reviewText && review.reviewText.trim() !== '';
     const willHaveReview = dto.reviewText && dto.reviewText.trim() !== '';
+    const hadText = typeof review.reviewText === 'string' && review.reviewText.trim() !== '';
+    const newText = typeof dto.reviewText === 'string' && dto.reviewText.trim() !== '';
+    const textChanged = newText && dto.reviewText !== review.reviewText;
 
     if (dto.rating !== undefined) review.rating = dto.rating;
-    if (dto.reviewText !== undefined) review.reviewText = dto.reviewText;
+    if (dto.reviewText !== undefined) {
+      review.reviewText = dto.reviewText;
+      // Ajout logique reviewTextAddedAt :
+      if (!hadText && newText) {
+        // Premier ajout de texte
+        review.reviewTextAddedAt = new Date();
+      } else if (hadText && textChanged) {
+        // Texte modifié
+        review.reviewTextAddedAt = new Date();
+      } else if (hadText && !newText) {
+        // Texte retiré : on supprime reviewTextAddedAt
+        review.reviewTextAddedAt = undefined;
+      }
+    }
 
     await review.save();
     // Si on passe d'une review à une rating seule, décrémente le compteur
@@ -495,5 +515,56 @@ export class ReviewsService {
     const sortField = sortFields[sort] || 'updatedAt';
     const sortOrder = order === 'asc' ? 1 : -1;
     return this.reviewModel.find({ userId, reviewText: { $exists: true, $ne: '' } }).sort({ [sortField]: sortOrder }).lean();
+  }
+
+  /**
+   * Récupère les reviews des users suivis par l'utilisateur (feed), triées par plus récentes
+   * @param userId id de l'utilisateur connecté
+   * @param page page de pagination
+   * @param limit taille de page
+   */
+  async getReviewsFromFollowed(userId: string, page = 1, limit = 10) {
+    // 1. Récupérer la liste des IDs suivis
+    const followed = await this.prisma.follower.findMany({
+      where: { followerId: userId },
+      select: { followingId: true },
+    });
+    const followingIds = followed.map(f => f.followingId);
+    if (!followingIds.length) {
+      return { data: [], total: 0, page, totalPages: 0 };
+    }
+    // 2. Paginer et trier les reviews des suivis (reviews récentes, reviewText non vide)
+    const query = { userId: { $in: followingIds }, reviewText: { $exists: true, $ne: '' } };
+    const total = await this.reviewModel.countDocuments(query);
+    const reviews = await this.reviewModel.find(query)
+      .sort({ reviewTextAddedAt: -1, createdAt: -1 }) // tri sur reviewTextAddedAt desc, puis createdAt desc
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+    // 3. Récupérer les infos users
+    const userIds = Array.from(new Set(reviews.map(r => r.userId)));
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, username: true, avatar: true },
+    });
+    const usersMap = Object.fromEntries(users.map(u => [u.id, u]));
+    // 4. Format minimal pour la réponse (optimisé)
+    const data = reviews.map(r => ({
+      id: r._id,
+      contentId: r.contentId,
+      reviewText: r.reviewText,
+      rating: r.rating,
+      reviewTextAddedAt: r.reviewTextAddedAt,
+      type: r.type,
+      user: usersMap[r.userId] || { id: r.userId, username: 'Utilisateur inconnu', avatar: null },
+      likesCount: r.likesCount,
+      commentsCount: r.commentsCount,
+    }));
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 }

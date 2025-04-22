@@ -91,4 +91,53 @@ export class HistoryService {
   async countUsersForContent(contentId: string, type: string) {
     return this.historyModel.countDocuments({ contentId, type });
   }
+
+  // --- NOUVEL ENDPOINT FEED ---
+  async getHistoryFromFollowed(userId: string, page = 1, limit = 10) {
+    // 1. Qui je follow ?
+    const following = await this.prisma.follower.findMany({
+      where: { followerId: userId },
+      select: { followingId: true },
+    });
+    const followingIds = following.map(f => f.followingId);
+    if (!followingIds.length) {
+      return { data: [], total: 0, page, totalPages: 0 };
+    }
+    // 2. Récupérer les items des suivis, triés par consumedAt desc
+    const filter = { userId: { $in: followingIds } };
+    const total = await this.historyModel.countDocuments(filter);
+    const items = await this.historyModel
+      .find(filter)
+      .sort({ consumedAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+    // 3. Récupérer les users (pour username/avatar)
+    const userIds = [...new Set(items.map(i => i.userId))];
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, username: true, avatar: true },
+    });
+    const usersMap = Object.fromEntries(users.map(u => [u.id, u]));
+    // 4. Récupérer les contenus (pour cover_url et title)
+    const contentIds = [...new Set(items.map(i => i.contentId))];
+    const contents = await this.contentModel.find({ _id: { $in: contentIds } }, { title: 1, image_url: 1 }).lean();
+    const contentsMap = Object.fromEntries(contents.map(c => [String(c._id), c]));
+    // 5. Format minimal pour la réponse
+    const data = items.map(i => ({
+      id: i._id,
+      contentId: i.contentId,
+      type: i.type,
+      consumedAt: i.consumedAt,
+      user: usersMap[i.userId] || { id: i.userId, username: 'Utilisateur inconnu', avatar: null },
+      title: contentsMap[String(i.contentId)]?.title || null,
+      cover_url: contentsMap[String(i.contentId)]?.image_url || null,
+    }));
+    return {
+      data,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
 }

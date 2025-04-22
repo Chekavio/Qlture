@@ -18,6 +18,9 @@ export class Review extends Document {
   @Prop()
   reviewText?: string;
 
+  @Prop()
+  reviewTextAddedAt?: Date;
+
   @Prop({ default: 0 })
   likesCount: number;
 
@@ -43,3 +46,6 @@ ReviewSchema.index({ contentId: 1 });
 
 // ✅ Index pour la recherche de review par userId (pour userReview)
 ReviewSchema.index({ userId: 1 });
+
+// ✅ Index pour le feed social sur reviewTextAddedAt
+ReviewSchema.index({ reviewTextAddedAt: -1 });

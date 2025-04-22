@@ -145,6 +145,22 @@ export class ReviewsController {
     };
   }
 
+  // --- NOUVEL ENDPOINT ---
+  @Get('feed/following')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Afficher les reviews des personnes suivies par un user, triées par plus récentes' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page de pagination', example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Taille de page', example: 10 })
+  @ApiResponse({ status: 200, description: 'Liste paginée des reviews des personnes suivies', schema: { example: { data: [ { id: 'reviewId', contentId: '...', reviewText: '...', rating: 4.5, createdAt: '2025-01-01T12:00:00Z', updatedAt: '2025-01-01T12:00:00Z', type: 'movie', user: { id: '...', username: '...', avatar: null }, likesCount: 2, commentsCount: 1, isLiked: false } ], total: 42, page: 1, totalPages: 5 } } })
+  async getReviewsFromFollowed(
+    @CurrentUser('sub') userId: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+  ) {
+    if (!userId) throw new NotFoundException('Utilisateur non authentifié');
+    return this.reviewsService.getReviewsFromFollowed(userId, page, limit);
+  }
+
   // --- ROUTES DYNAMIQUES (doivent venir APRÈS la route publique) ---
   @Get(':userId/:contentId')
   @ApiOperation({ summary: 'Récupérer la note et le commentaire d’un user précis pour un contenu (usage admin, modération, etc.)' })

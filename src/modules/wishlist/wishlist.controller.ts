@@ -35,6 +35,18 @@ export class WishlistController {
   ) {
     return this.wishlistService.removeItem(userId, contentId, type);
   }
+  // --- NOUVEL ENDPOINT ---
+  @Get('feed/following')
+  @ApiOperation({ summary: 'Afficher les derniers ajouts en wishlist des personnes suivies par un user, triés par plus récents' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page de pagination', example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Taille de page', example: 10 })
+  async getWishlistFromFollowed(
+    @CurrentUser('sub') userId: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
+    return this.wishlistService.getWishlistFromFollowed(userId, page, limit);
+  }
 
   @Get(':userId/:type')
   @ApiOperation({ summary: 'Récupérer la wishlist d’un user/type' })
@@ -58,14 +70,5 @@ export class WishlistController {
     return this.wishlistService.getUsersForContent(contentId, type);
   }
 
-  @Get('content/:contentId/:type/count')
-  @ApiOperation({ summary: 'Compter combien d’utilisateurs ont ce contenu/type en wishlist' })
-  @ApiParam({ name: 'contentId', type: 'string' })
-  @ApiParam({ name: 'type', enum: ['movie', 'book', 'game', 'album'] })
-  async countUsersForContent(
-    @Param('contentId') contentId: string,
-    @Param('type') type: string,
-  ) {
-    return this.wishlistService.countUsersForContent(contentId, type);
-  }
+  
 }

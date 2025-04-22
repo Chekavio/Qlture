@@ -246,3 +246,22 @@ export class CreateContentDto {
   @IsString()
   image_url?: string | null;
 }
+
+export class TopRatedContentsQueryDto {
+  @ApiPropertyOptional({ description: 'Page number', example: 1, type: Number })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  page?: number = 1;
+
+  @ApiPropertyOptional({ description: 'Items per page', example: 10, type: Number })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  limit?: number = 10;
+
+  @ApiPropertyOptional({ description: 'Content type filter', enum: ['movie', 'book', 'game', 'album'], example: 'movie' })
+  @IsOptional()
+  @IsEnum(['movie', 'book', 'game', 'album'])
+  type?: string;
+}

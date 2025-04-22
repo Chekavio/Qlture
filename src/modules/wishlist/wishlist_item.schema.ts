@@ -11,6 +11,12 @@ export class WishlistItem extends Document {
 
   @Prop({ required: true, enum: ['movie', 'book', 'game', 'album'] })
   type: string;
+
+  @Prop()
+  createdAt?: Date;
+
+  @Prop()
+  updatedAt?: Date;
 }
 
 export const WishlistItemSchema = SchemaFactory.createForClass(WishlistItem);

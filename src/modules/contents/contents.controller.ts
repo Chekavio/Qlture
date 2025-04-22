@@ -11,6 +11,7 @@ import {
 import { ContentsService } from './contents.service';
 import { ReviewsService } from '../reviews/reviews.service';
 import { CreateContentDto } from './dto';
+import { TopRatedContentsQueryDto } from './dto';
 import {
   ApiTags,
   ApiOperation,
@@ -256,7 +257,6 @@ export class ContentsController {
 
   @Public()
   @UseGuards(OptionalJwtAuthGuard)
-  @ApiBearerAuth('JWT-auth')
   @Get()
   @ApiOperation({ summary: 'Récupérer tous les contenus avec pagination' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -268,7 +268,6 @@ export class ContentsController {
 
   @Public()
   @UseGuards(OptionalJwtAuthGuard)
-  @ApiBearerAuth('JWT-auth')
   @Get('monthly-releases')
   @ApiOperation({ summary: 'Get current month releases ranked by rating' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -290,6 +289,81 @@ export class ContentsController {
       Number(limit),
       type,
     );
+  }
+
+  @Public()
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get('top-rated')
+  @ApiOperation({ summary: 'Get paginated top-rated contents, optionally filtered by type' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'type', required: false, enum: ['movie', 'book', 'game', 'album'], description: 'Filter by content type' })
+  async getTopRatedContents(
+    @Query() query: TopRatedContentsQueryDto
+  ) {
+    const results = await this.contentsService.getTopRatedContents(
+      query.page ?? 1,
+      query.limit ?? 10,
+      query.type
+    );
+    // Map to only return id, title, release_date, average_rating, type (id first)
+    return results.map(content => ({
+      id: content._id?.toString?.() ?? content.id ?? content._id,
+      title: content.title,
+      release_date: content.release_date,
+      average_rating: content.average_rating,
+      type: content.type,
+    }));
+  }
+
+  @Public()
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get('most-liked')
+  @ApiOperation({ summary: 'Get paginated most-liked contents, optionally filtered by type' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'type', required: false, enum: ['movie', 'book', 'game', 'album'], description: 'Filter by content type' })
+  async getMostLikedContents(
+    @Query() query: TopRatedContentsQueryDto
+  ) {
+    const results = await this.contentsService.getMostLikedContents(
+      query.page ?? 1,
+      query.limit ?? 10,
+      query.type
+    );
+    // Map to only return id, title, release_date, likes_count, type (id first)
+    return results.map(content => ({
+      id: content._id?.toString?.() ?? content.id ?? content._id,
+      title: content.title,
+      release_date: content.release_date,
+      likes_count: content.likes_count,
+      type: content.type,
+    }));
+  }
+
+  @Public()
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get('most-wanted-this-month')
+  @ApiOperation({ summary: 'Get paginated most wanted contents for current month, optionally filtered by type' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'type', required: false, enum: ['movie', 'book', 'game', 'album'], description: 'Filter by content type' })
+  async getMostWantedThisMonth(
+    @Query() query: TopRatedContentsQueryDto
+  ) {
+    const results = await this.contentsService.getMostWantedThisMonth(
+      query.page ?? 1,
+      query.limit ?? 10,
+      query.type
+    );
+    // Map to only return id, title, release_date, wishlist_count, type (id first)
+    return results.map(content => ({
+      id: content._id?.toString?.() ?? content.id ?? content._id,
+      title: content.title,
+      release_date: content.release_date,
+      wishlist_count: content.wishlist_count,
+      type: content.type,
+    }));
   }
 
   @Public()

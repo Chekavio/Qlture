@@ -219,4 +219,55 @@ export class ContentsService {
     const like = await this.contentLikeModel.findOne({ contentId, userId });
     return !!like;
   }
+
+  // Paginated, sorted by best average_rating, with optional type filter
+  async getTopRatedContents(page: number, limit: number, type?: string) {
+    const query: any = {};
+    if (type) {
+      query.type = type;
+    }
+    return this.contentsRepository.findWithQuery(
+      query,
+      page,
+      limit,
+      { average_rating: -1 } // Descending order by rating
+    );
+  }
+
+  // Paginated, sorted by best likes_count, with optional type filter
+  async getMostLikedContents(page: number, limit: number, type?: string) {
+    const query: any = {};
+    if (type) {
+      query.type = type;
+    }
+    return this.contentsRepository.findWithQuery(
+      query,
+      page,
+      limit,
+      { likes_count: -1 } // Descending order by likes
+    );
+  }
+
+  // Paginated, most wanted (highest wishlist_count) for current month, with optional type filter
+  async getMostWantedThisMonth(page: number, limit: number, type?: string) {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    const query: any = {
+      release_date: {
+        $gte: startOfMonth,
+        $lte: endOfMonth,
+      },
+    };
+    if (type) {
+      query.type = type;
+    }
+    return this.contentsRepository.findWithQuery(
+      query,
+      page,
+      limit,
+      { wishlist_count: -1 } // Descending order by wishlist_count
+    );
+  }
 }

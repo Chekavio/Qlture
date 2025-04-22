@@ -37,7 +37,19 @@ export class HistoryController {
   ) {
     return this.historyService.removeItem(userId, contentId, type);
   }
-
+  // --- NOUVEL ENDPOINT FEED ---
+  @Get('feed/following')
+  @ApiOperation({ summary: 'Afficher les derniers contenus vus/lus par les personnes suivies, triés par consumedAt desc' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page de pagination', example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Taille de page', example: 10 })
+  async getHistoryFromFollowed(
+    @CurrentUser('sub') userId: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
+    return this.historyService.getHistoryFromFollowed(userId, page, limit);
+  }
+  
   @Get(':userId/:type')
   @ApiOperation({ summary: 'Récupérer la liste historique d’un user/type' })
   @ApiParam({ name: 'userId', type: 'string' })
@@ -60,14 +72,5 @@ export class HistoryController {
     return this.historyService.getUsersForContent(contentId, type);
   }
 
-  @Get('content/:contentId/:type/count')
-  @ApiOperation({ summary: 'Compter combien d’utilisateurs ont ce contenu/type dans leur historique' })
-  @ApiParam({ name: 'contentId', type: 'string' })
-  @ApiParam({ name: 'type', enum: ['movie', 'book', 'game', 'album'] })
-  async countUsersForContent(
-    @Param('contentId') contentId: string,
-    @Param('type') type: string,
-  ) {
-    return this.historyService.countUsersForContent(contentId, type);
-  }
+  
 }

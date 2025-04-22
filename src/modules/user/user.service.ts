@@ -134,7 +134,7 @@ export class UserService {
         ...userData,
         password: hashedPassword,
         isActive: true,
-        isEmailVerified: false,
+        isEmailVerified: userData.isEmailVerified ?? false,
         lastLogin: now,
         createdAt: now,
         updatedAt: now,

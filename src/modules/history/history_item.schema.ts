@@ -14,6 +14,12 @@ export class HistoryItem extends Document {
 
   @Prop()
   consumedAt: Date;
+
+  @Prop()
+  createdAt?: Date;
+
+  @Prop()
+  updatedAt?: Date;
 }
 
 export const HistoryItemSchema = SchemaFactory.createForClass(HistoryItem);
