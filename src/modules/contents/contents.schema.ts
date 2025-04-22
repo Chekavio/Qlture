@@ -25,65 +25,62 @@ export class Content extends Document {
   genres: string[] | undefined;
 
   @Prop({ type: Object, default: undefined })
-metadata: {
-  // 🎥 Films
-  director?: string | null;
-  actors?: string[] | undefined;
+  metadata: {
+    // --- Book fields ---
+    authors?: string[] | undefined;
+    subtitle?: string | null;
+    page_count?: number | null;
+    pagination?: string | null;
+    isbn?: string | null;
+    isbn_10?: string | null;
+    isbn_13?: string | null;
+    openlibrary_edition_id?: string | null;
+    work_id?: string | null;
+    publish_country?: string | null;
+    publish_places?: string[] | undefined;
+    contributors?: { role: string; name: string }[] | undefined;
+    translated_from?: string[] | undefined;
 
-  // 📚 Livres
-  authors?: string[] | undefined;
-  subtitle?: string | null;
-  page_count?: number | null;
-  pagination?: string | null;
-  isbn?: string | null;
-  isbn_10?: string | null;
-  isbn_13?: string | null;
-  openlibrary_edition_id?: string | null;
-  work_id?: string | null;
-  publish_country?: string | null;
-  publish_places?: string[] | undefined;
-  contributors?: { role: string; name: string }[] | undefined;
-  translated_from?: string[] | undefined;
+    // --- Movie fields ---
+    director?: string | null;
+    actors?: string[] | undefined;
 
-  // 💽 Albums (si tu gardes ce type-là)
-  artist?: string | null;
-  tracks?: string[] | undefined;
-  duration?: number | null;
+    // --- Album fields ---
+    artist?: string | null;
+    tracks?: string[] | undefined;
+    duration?: number | null;
 
-  // 🎮 Jeux vidéo
-  developers?: string[] | undefined;
-  publishers?: string[] | undefined;
-  platforms?: string[] | undefined;
-  gameplay?: string[] | undefined; // Ex: RPG, platformer, shooter
-  game_modes?: string[] | undefined; // Solo, Multi, Coop
-  engine?: string | null; // Unity, Unreal Engine…
-  player_perspectives?: string[] | undefined; // FPS, TPS, isometric…
-  franchise?: string | null;
-  series?: string[] | undefined;
-  story?: string | null; // Différent du résumé principal
-  youtube_trailer_id?: string | null;
-  igdb_id?: string | null;
-  
-  release_type?: 'full' | 'alpha' | 'beta' | 'early_access' | 'offline' | 'cancelled' | 'rumored' | 'delisted' | 'unknown';
-  release_versions?: {
-    platform?: string;
-    region?: string;
-    date?: Date | null;
-    category?: 'full' | 'alpha' | 'beta' | 'early_access' | 'offline' | 'cancelled' | 'rumored' | 'delisted' | 'unknown';
-  }[];
+    // --- Video game fields (from import_games_with_dashboard.ts) ---
+    igdb_id?: string | null;
+    developers?: string[] | undefined;
+    publishers?: string[] | undefined;
+    platforms?: string[] | undefined;
+    type?: string[] | undefined; // genres
+    game_modes?: string[] | undefined;
+    player_perspectives?: string[] | undefined;
+    engine?: string | null;
+    series?: string[] | undefined;
+    story?: string | null;
+    back_cover_url?: string | null;
+    screenshots?: string[] | undefined;
+    websites?: string[] | undefined;
+    release_type?: 'full' | 'alpha' | 'beta' | 'early_access' | 'offline' | 'cancelled' | 'rumored' | 'delisted' | 'unknown';
+    release_versions?: {
+      platform?: string;
+      region?: string;
+      date?: Date | null;
+      category?: 'full' | 'alpha' | 'beta' | 'early_access' | 'offline' | 'cancelled' | 'rumored' | 'delisted' | 'unknown';
+    }[];
+    franchise?: string | null;
+    youtube_trailer_id?: string | null;
 
-  // 🎨 Médias enrichis
-  back_cover_url?: string | null; // Image grand format pour arrière-plan
-
-  // Divers
-  language?: string | null;
-  identifiers?: Record<string, any> | undefined;
-  weight?: string | null;
-  physical_format?: string | null;
-  dimensions?: string | null;
-  websites?: string[] | undefined;
-}
-
+    // --- Misc/other ---
+    language?: string | null;
+    identifiers?: Record<string, any> | undefined;
+    weight?: string | null;
+    physical_format?: string | null;
+    dimensions?: string | null;
+  }
 
   @Prop({ type: Number, default: 0 })
   likes_count: number;
@@ -109,7 +106,7 @@ metadata: {
 
 export const ContentSchema = SchemaFactory.createForClass(Content);
 
-// 🔹 Unique index for movies: type, title, release_date
+// Unique index for movies: type, title, release_date
 ContentSchema.index(
   { type: 1, title: 1, release_date: 1 },
   {
@@ -118,7 +115,7 @@ ContentSchema.index(
   }
 );
 
-// 🔹 Unique index for books: type, title, release_date, metadata.subtitle
+// Unique index for books: type, title, release_date, metadata.subtitle
 ContentSchema.index(
   { type: 1, title: 1, release_date: 1, 'metadata.subtitle': 1 },
   {
@@ -127,5 +124,14 @@ ContentSchema.index(
   }
 );
 
-// 🔹 Index pour optimiser la recherche par date de sortie et le tri par note moyenne
+// Unique index for games: type, metadata.igdb_id
+ContentSchema.index(
+  { type: 1, 'metadata.igdb_id': 1 },
+  {
+    unique: true,
+    partialFilterExpression: { type: 'game' }
+  }
+);
+
+// Index pour optimiser la recherche par date de sortie et le tri par note moyenne
 ContentSchema.index({ release_date: 1, average_rating: -1 });

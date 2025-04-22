@@ -58,6 +58,13 @@ export class UserService {
       lastLogin: user.lastLogin || undefined,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      review_count: user.review_count,
+      moovie_count: user.moovie_count,
+      book_count: user.book_count,
+      games_count: user.games_count,
+      watch_list_count: user.watch_list_count,
+      read_list_count: user.read_list_count,
+      game_list_count: user.game_list_count,
     };
   }
 
@@ -164,7 +171,35 @@ export class UserService {
     const user = await this.prisma.user.findUnique({
       where: { email },
     });
-    return this.mapToIUserWithPassword(user);
+    if (!user) return null;
+    // Defensive: ensure user.id, user.email, user.username, user.isActive, and user.isEmailVerified are always present
+    if (!user.id) throw new Error('User record missing id');
+    if (!user.email) throw new Error('User record missing email');
+    if (!user.username) throw new Error('User record missing username');
+    if (typeof user.isActive !== 'boolean') throw new Error('User record missing isActive');
+    if (typeof user.isEmailVerified !== 'boolean') throw new Error('User record missing isEmailVerified');
+    if (!user.createdAt) throw new Error('User record missing createdAt');
+    if (!user.updatedAt) throw new Error('User record missing updatedAt');
+    const mapped = this.mapToIUserWithPassword(user);
+    return {
+      ...mapped,
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      isActive: user.isActive,
+      isEmailVerified: user.isEmailVerified,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      avatar: user.avatar ?? undefined,
+      description: user.description ?? undefined,
+      review_count: user.review_count,
+      moovie_count: user.moovie_count,
+      book_count: user.book_count,
+      games_count: user.games_count,
+      watch_list_count: user.watch_list_count,
+      read_list_count: user.read_list_count,
+      game_list_count: user.game_list_count,
+    };
   }
 
   async findByUsername(username: string): Promise<IUser | null> {

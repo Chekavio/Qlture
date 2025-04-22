@@ -21,7 +21,7 @@ let accessToken = '';
 const BATCH_SIZE = 500;
 const TOTAL_GAMES = 100000;
 const PROGRESS_FILE = './progress_igdb.txt';
-const collectionName = 'games_import_test';
+const collectionName = 'contents';
 const isTest = process.argv.includes('--test');
 
 const ContentModel = mongoose.model(collectionName, ContentSchema, collectionName);
@@ -79,7 +79,9 @@ async function fetchGames(offset: number) {
     'release_dates.human',
     'release_dates.date',
     'release_dates.platform.name',
-    'release_dates.region'
+    'release_dates.region',
+    'videos',
+    'franchises',
   ];
 
   const body = `fields ${fields.join(',')}; sort popularity desc; limit ${BATCH_SIZE}; offset ${offset};`;
@@ -111,7 +113,117 @@ function getIgdbImageUrl(rawUrl: string | undefined, size: string): string {
   return `https://images.igdb.com/igdb/image/upload/${size}/${id}.webp`;
 }
 
-function formatGameData(game: any) {
+function extractYoutubeTrailerId(videos: any[]): string | null {
+  if (!Array.isArray(videos) || !videos.length) return null;
+  // Prefer video with 'trailer' in name, fallback to first
+  const trailer = videos.find(v => v.name?.toLowerCase().includes('trailer') && v.video_id);
+  if (trailer) return trailer.video_id;
+  if (videos[0]?.video_id) return videos[0].video_id;
+  return null;
+}
+
+// --- Helper: Fetch details for IGDB IDs from a given endpoint ---
+async function fetchIgdbDetails(endpoint: string, ids: number[], fields: string[]): Promise<Record<number, any>> {
+  if (!ids.length) return {};
+  const body = `fields ${fields.join(',')}; where id = (${ids.join(',')});`;
+  const headers = {
+    'Client-ID': IGDB_CLIENT_ID,
+    Authorization: `Bearer ${accessToken}`,
+    'Content-Type': 'text/plain',
+  };
+  try {
+    const res = await axios.post(
+      `${IGDB_API_URL}/${endpoint}`,
+      body,
+      { headers }
+    );
+    // Map by id for fast lookup
+    return Object.fromEntries(res.data.map((item: any) => [item.id, item]));
+  } catch (error: any) {
+    console.error(`[IGDB] Error fetching ${endpoint} details:`, error);
+    return {};
+  }
+}
+
+async function importGames() {
+  console.log(chalk.cyan('[DEBUG] importGames called'));
+  await connectDB();
+  await getIGDBToken();
+
+  let offset = 0;
+  if (fs.existsSync(PROGRESS_FILE)) {
+    const val = parseInt(fs.readFileSync(PROGRESS_FILE, 'utf8'));
+    if (!isNaN(val)) offset = val;
+  }
+
+  const total = isTest ? BATCH_SIZE : TOTAL_GAMES;
+  const bar = new cliProgress.SingleBar({
+    format: `${chalk.cyan('{bar}')} {percentage}% | {value}/{total} | ✅ {inserted} | ❌ {errors}`,
+    barCompleteChar: '█',
+    barIncompleteChar: '░',
+    hideCursor: true
+  });
+
+  let inserted = 0;
+  let errors = 0;
+
+  bar.start(total, offset, { inserted, errors });
+
+  for (; offset < total; offset += BATCH_SIZE) {
+    const games = await fetchGames(offset);
+    if (!games.length) break;
+
+    // Collect all unique video and franchise IDs
+    const allVideoIds = Array.from(
+      new Set(
+        games.flatMap(g => Array.isArray(g.videos) ? g.videos : [])
+          .filter((x): x is number => typeof x === 'number')
+      )
+    ) as number[];
+    const allFranchiseIds = Array.from(
+      new Set(
+        games.flatMap(g => Array.isArray(g.franchises) ? g.franchises : [])
+          .filter((x): x is number => typeof x === 'number')
+      )
+    ) as number[];
+
+    // Fetch details in batch
+    const videoDetails = await fetchIgdbDetails('game_videos', allVideoIds, ['id','video_id','name']);
+    const franchiseDetails = await fetchIgdbDetails('franchises', allFranchiseIds, ['id','name']);
+
+    await Promise.all(games.map(game => limit(async () => {
+      // Map videos for this game
+      const videos = (Array.isArray(game.videos) ? game.videos.map((vid: number) => videoDetails[vid]).filter(Boolean) : []);
+      // Map franchises for this game
+      const franchiseName = (Array.isArray(game.franchises) && game.franchises.length > 0)
+        ? (franchiseDetails[game.franchises[0]]?.name || null)
+        : null;
+      const doc = formatGameData(game, { videos, franchiseName });
+      const query = { type: 'game', 'metadata.igdb_id': doc.metadata.igdb_id };
+      try {
+        await ContentModel.findOneAndUpdate(
+          query,
+          doc,
+          { upsert: true, new: true }
+        );
+        inserted++;
+      } catch (err: any) {
+        errors++;
+        console.error(chalk.red(`❌ Échec insertion ${doc.title}:`), err);
+      }
+    })));
+
+    fs.writeFileSync(PROGRESS_FILE, (offset + BATCH_SIZE).toString());
+    bar.update(offset + BATCH_SIZE, { inserted, errors });
+    if (isTest) break;
+  }
+
+  bar.stop();
+  console.log(chalk.green(`\n🎮 Import terminé ! ✅ ${inserted} | ❌ ${errors}`));
+  await mongoose.disconnect();
+}
+
+function formatGameData(game: any, enrich: { videos?: any[]; franchiseName?: string } = {}) {
   const release_versions = (game.release_dates || []).map((r: any) => ({
     platform: r.platform?.name || undefined,
     region: typeof r.region === 'number' ? String(r.region) : undefined,
@@ -166,11 +278,6 @@ function formatGameData(game: any) {
   const developers = involved.filter((c: any) => c.developer).map((c: any) => c.company?.name).filter(Boolean);
   const publishers = involved.filter((c: any) => c.publisher).map((c: any) => c.company?.name).filter(Boolean);
 
-  // DEBUG: Log collection field for Doritos Crash Course
-  if (game.name && game.name.toLowerCase().includes('doritos crash course')) {
-    console.log('[DEBUG COLLECTION FIELD]', game.name, JSON.stringify(game.collection));
-  }
-
   return {
     title: game.name || 'Untitled',
     title_vo: game.name,
@@ -195,7 +302,9 @@ function formatGameData(game: any) {
       screenshots: screenshotsArr,
       websites: (game.websites || []).map((w: any) => w.url).filter(Boolean),
       release_type: releaseType,
-      release_versions
+      release_versions,
+      franchise: enrich.franchiseName || null,
+      youtube_trailer_id: extractYoutubeTrailerId(enrich.videos ?? [])
     }
   };
 }
@@ -212,77 +321,6 @@ function convertCategory(category: number): string {
     case 8: return 'delisted';
     default: return 'unknown';
   }
-}
-
-async function importGames() {
-  console.log(chalk.cyan('[DEBUG] importGames called'));
-  await connectDB();
-  await getIGDBToken();
-
-  let offset = 0;
-  if (fs.existsSync(PROGRESS_FILE)) {
-    const val = parseInt(fs.readFileSync(PROGRESS_FILE, 'utf8'));
-    if (!isNaN(val)) offset = val;
-  }
-
-  const total = isTest ? BATCH_SIZE : TOTAL_GAMES;
-  const bar = new cliProgress.SingleBar({
-    format: `${chalk.cyan('{bar}')} {percentage}% | {value}/{total} | ✅ {inserted} | ❌ {errors}`,
-    barCompleteChar: '█',
-    barIncompleteChar: '░',
-    hideCursor: true
-  });
-
-  let inserted = 0;
-  let errors = 0;
-
-  bar.start(total, offset, { inserted, errors });
-
-  console.log(chalk.cyan(`[DEBUG] Entering import loop with offset=${offset}, total=${total}`));
-  for (; offset < total; offset += BATCH_SIZE) {
-    console.log(chalk.cyan(`[DEBUG] About to call fetchGames(offset=${offset})`));
-    const games = await fetchGames(offset);
-    console.log(chalk.blue(`[DEBUG] fetchGames(offset=${offset}) returned ${games.length} games`));
-    if (games.length > 0) {
-      console.log(chalk.blue('[DEBUG] First game sample:'), JSON.stringify(games[0], null, 2));
-    }
-    if (!games.length) break;
-
-    await Promise.all(games.map(game => limit(async () => {
-      const doc = formatGameData(game);
-      const hasPublisher = Array.isArray(doc.metadata.publishers) && doc.metadata.publishers.length > 0;
-      const hasDeveloper = Array.isArray(doc.metadata.developers) && doc.metadata.developers.length > 0;
-      // Log only if both publisher and developer are present
-      if (hasPublisher && hasDeveloper) {
-        console.log(chalk.magenta(`[PUB/DEV] ${doc.title} | Publishers: ${doc.metadata.publishers.join(', ')} | Developers: ${doc.metadata.developers.join(', ')}`));
-      }
-      // Log games with a series
-      if (doc.metadata.series && doc.metadata.series.length > 0) {
-        console.log(chalk.cyan(`[SERIES] ${doc.title} | Series: ${doc.metadata.series.join(', ')}`));
-      }
-      const query = { type: 'game', 'metadata.igdb_id': doc.metadata.igdb_id };
-      try {
-        await ContentModel.findOneAndUpdate(
-          query,
-          doc,
-          { upsert: true, new: true }
-        );
-        inserted++;
-      } catch (err: any) {
-        errors++;
-        console.error(chalk.red(`❌ Échec insertion ${doc.title}:`), err);
-      }
-    })));
-
-    fs.writeFileSync(PROGRESS_FILE, (offset + BATCH_SIZE).toString());
-    bar.update(offset + BATCH_SIZE, { inserted, errors });
-
-    if (isTest) break;
-  }
-
-  bar.stop();
-  console.log(chalk.green(`\n🎮 Import terminé ! ✅ ${inserted} | ❌ ${errors}`));
-  await mongoose.disconnect();
 }
 
 importGames();

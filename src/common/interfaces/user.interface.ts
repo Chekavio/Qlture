@@ -13,6 +13,13 @@ export interface IUser {
   lastLogin?: Date;
   createdAt: Date;
   updatedAt: Date;
+  review_count: number;
+  moovie_count: number;
+  book_count: number;
+  games_count: number;
+  watch_list_count: number;
+  read_list_count: number;
+  game_list_count: number;
 }
 
 export interface IUserWithPassword extends IUser {
